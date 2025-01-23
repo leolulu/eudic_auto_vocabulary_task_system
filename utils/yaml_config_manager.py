@@ -2,7 +2,7 @@ import os
 
 import yaml
 
-from constants.yaml import CONFIG_FILE_NAME, DOUBAO_API_KEY, DOUBAO_MODEL_ACCESS_POINT, EUDIC_API_KEY
+from constants.yaml import CONFIG_FILE_NAME, DOUBAO_API_KEY, DOUBAO_MODEL_ACCESS_POINT, EUDIC_API_KEY, DIDA365_USERNAME, DIDA365_PASSWORD
 
 
 class YamlConfigManager:
@@ -15,6 +15,8 @@ class YamlConfigManager:
                     EUDIC_API_KEY: "请输入欧路词典API密钥",
                     DOUBAO_API_KEY: "请输入豆包API密钥",
                     DOUBAO_MODEL_ACCESS_POINT: "请输入豆包模型在线推理接入点",
+                    DIDA365_USERNAME: "请输入Dida365用户名",
+                    DIDA365_PASSWORD: "请输入Dida365密码",
                 }
             )
             raise UserWarning(f"配置文件不存在，已生成默认配置文件：{self.config_file_path}")
