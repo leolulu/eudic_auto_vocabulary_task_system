@@ -1,8 +1,8 @@
-from models.attachment import Attachment
-from models.upload_attachment import uploadAttachment
-from models.link import Link
-from utils.backlink_util import BackLinkUtil
-from utils.time_util import get_prc_arrow, get_today_arrow, get_utc_str
+from ..models.attachment import Attachment
+from ..models.upload_attachment import uploadAttachment
+from ..models.link import Link
+from ..utils.backlink_util import BackLinkUtil
+from ..utils.time_util import get_prc_arrow, get_today_arrow, get_utc_str
 
 
 class Task:

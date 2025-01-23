@@ -6,20 +6,20 @@ from argparse import Namespace
 from pathlib import Path
 from time import sleep
 
-from api.dida365 import Dida365
-from exceptions.backlink_exceptions import TaskNotFoundException
-from models.backlink import BackLink
-from models.link import Link
-from models.target_date import TargetDate
-from models.task import Task
-from models.upload_attachment import uploadAttachment
-from utils.backlink_util import BackLinkUtil
-from utils.commom_util import groupby_func
-from utils.decorator_util import ensure_run_retry
-from utils.dict_util import BaiduFanyi
-from utils.dictvoice_util import get_dictvoice_bytes
-from utils.task_selector import TaskSelector
-from utils.time_util import get_days_offset, get_today_arrow
+from .api.dida365 import Dida365
+from .exceptions.backlink_exceptions import TaskNotFoundException
+from .models.backlink import BackLink
+from .models.link import Link
+from .models.target_date import TargetDate
+from .models.task import Task
+from .models.upload_attachment import uploadAttachment
+from .utils.backlink_util import BackLinkUtil
+from .utils.commom_util import groupby_func
+from .utils.decorator_util import ensure_run_retry
+from .utils.dict_util import BaiduFanyi
+from .utils.dictvoice_util import get_dictvoice_bytes
+from .utils.task_selector import TaskSelector
+from .utils.time_util import get_days_offset, get_today_arrow
 
 
 class DidaManipulate:

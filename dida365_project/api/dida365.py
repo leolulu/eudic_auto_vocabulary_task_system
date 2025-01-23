@@ -6,11 +6,11 @@ from io import BufferedReader
 import requests
 from retrying import retry
 
-from models.project import Project
-from models.task import Task
-from models.upload_attachment import uploadAttachment
-from utils.file_util import get_user_password
-from utils.time_util import get_standard_str, get_today_arrow
+from ..models.project import Project
+from ..models.task import Task
+from ..models.upload_attachment import uploadAttachment
+from ..utils.file_util import get_user_password
+from ..utils.time_util import get_standard_str, get_today_arrow
 
 
 class Dida365:

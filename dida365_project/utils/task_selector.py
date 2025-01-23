@@ -2,8 +2,8 @@ import random
 from itertools import groupby
 from typing import List
 
-from models.task import Task
-from utils.time_util import get_days_offset, get_today_arrow
+from ..models.task import Task
+from .time_util import get_days_offset, get_today_arrow
 
 
 class TaskSelector:

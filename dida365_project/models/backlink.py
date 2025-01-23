@@ -1,6 +1,6 @@
 import re
 
-from models.link import Link
+from ..models.link import Link
 
 
 class BackLink:

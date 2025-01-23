@@ -1,8 +1,8 @@
 import re
 from typing import List
 
-from models.backlink import BackLink
-from models.link import Link
+from ..models.backlink import BackLink
+from ..models.link import Link
 
 
 class BackLinkUtil:
