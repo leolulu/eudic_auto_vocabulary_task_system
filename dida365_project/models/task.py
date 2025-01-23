@@ -1,6 +1,8 @@
+from typing import List
+
 from ..models.attachment import Attachment
-from ..models.upload_attachment import uploadAttachment
 from ..models.link import Link
+from ..models.upload_attachment import uploadAttachment
 from ..utils.backlink_util import BackLinkUtil
 from ..utils.time_util import get_prc_arrow, get_today_arrow, get_utc_str
 
@@ -22,6 +24,9 @@ class Task:
     COMPLETED_TIME = "completedTime"
     STATUS = "status"
     ATTACHMENTS = "attachments"
+    TAGS = "tags"
+    CHILD_IDS = "childIds"
+    PARENT_ID = "parentId"
     STATUS_ACTIVE = 0
     STATUS_COMPLETED = 2
 
@@ -46,6 +51,9 @@ class Task:
         self.kind = self.task_dict.get(Task.KIND)
         self.completed_time = self.task_dict.get(Task.COMPLETED_TIME)
         self.status = self.task_dict.get(Task.STATUS)
+        self.tags: List[str] = self.task_dict.get(Task.TAGS)
+        self.child_ids: List[str] = self.task_dict.get(Task.CHILD_IDS)
+        self.parent_id: str = self.task_dict.get(Task.PARENT_ID)
         self._backlink_util = BackLinkUtil(self)
         self.backlinks = self._backlink_util.backlinks
         self._load_field_attachments()
@@ -62,7 +70,7 @@ class Task:
     def _load_field_content(self):
         content = self.task_dict.get(Task.CONTENT)
         if content:
-            content = content.replace('\r\n', '\n')
+            content = content.replace("\r\n", "\n")
             self.task_dict[Task.CONTENT] = content
         self.content = content
 
@@ -83,24 +91,24 @@ class Task:
     @staticmethod
     def _gen_post_task_payload():
         payload = dict()
-        payload['add'] = []
-        payload['addAttachments'] = []
-        payload['delete'] = []
-        payload['deleteAttachments'] = []
-        payload['update'] = []
-        payload['updateAttachments'] = []
+        payload["add"] = []
+        payload["addAttachments"] = []
+        payload["delete"] = []
+        payload["deleteAttachments"] = []
+        payload["update"] = []
+        payload["updateAttachments"] = []
         return payload
 
     @staticmethod
-    def gen_update_date_payload(new_task_dict):
+    def gen_update_data_payload(new_task_dict):
         payload = Task._gen_post_task_payload()
-        payload['update'] = [new_task_dict]
+        payload["update"] = [new_task_dict]
         return payload
 
     @staticmethod
-    def gen_add_date_payload(new_task_dict):
+    def gen_add_data_payload(new_task_dict):
         payload = Task._gen_post_task_payload()
-        payload['add'] = [new_task_dict]
+        payload["add"] = [new_task_dict]
         return payload
 
     def shift_start_date(self, days):
@@ -127,12 +135,8 @@ class Task:
         self.task_dict[Task.CONTENT] = self.content
 
     def add_upload_attachment_post_payload_by_path(self, file_path):
-        self.attachments_to_upload.add(
-            uploadAttachment(self, file_path == file_path)
-        )
+        self.attachments_to_upload.add(uploadAttachment(self, file_path == file_path))
 
     def add_upload_attachment_post_payload_by_bytes(self, *file_bytes_objs):
         for file_bytes_obj in file_bytes_objs:
-            self.attachments_to_upload.add(
-                uploadAttachment(self, file_bytes_obj=file_bytes_obj)
-            )
+            self.attachments_to_upload.add(uploadAttachment(self, file_bytes_obj=file_bytes_obj))
