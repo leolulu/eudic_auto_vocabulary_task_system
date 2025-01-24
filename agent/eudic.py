@@ -2,6 +2,7 @@ import requests
 from constants.eudic import GET_WORD_URL, VOCAB_BOOK_BASE_URL
 from constants.eudic import DEFAULT_VOCAB_BOOK_NAME, VOCAB_BOOK_ID, VOCAB_BOOK_NAME
 from constants.header import HEADER_AUTHORIZATION, HEADER_USER_AGENT
+from models.eudic_word import Word
 from utils.datetime_util import is_last_24h_range
 
 
@@ -33,7 +34,7 @@ class Eudic:
                 return book_info[VOCAB_BOOK_ID]
         raise UserWarning(f"未找到默认生词本，请检查原始数据：{data}")
 
-    def get_words_in_book(self, vocab_book_id=None):
+    def get_words_in_book(self, vocab_book_id=None, days=1):
         url = GET_WORD_URL
         params = {
             "language": "en",
@@ -47,5 +48,4 @@ class Eudic:
             print(res.json())
             raise
 
-        for i in res.json()["data"]:
-            print(i["add_time"], is_last_24h_range(i["add_time"], 3))
+        return [Word(w) for w in res.json()["data"]]

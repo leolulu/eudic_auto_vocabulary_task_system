@@ -53,3 +53,9 @@ class Dida365Agent:
                 }
             )
         self.dida.adjust_task_parent(payload)
+
+    def search(self, keyword: str):
+        result = self.dida.search(keyword)
+        tasks = [Task(t) for t in result["tasks"]]
+        active_tasks = [t for t in tasks if t.status == Task.STATUS_ACTIVE]
+        return active_tasks

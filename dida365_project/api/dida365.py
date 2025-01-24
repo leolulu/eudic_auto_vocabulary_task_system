@@ -9,8 +9,6 @@ from retrying import retry
 from ..models.project import Project
 from ..models.task import Task
 from ..models.upload_attachment import uploadAttachment
-from ..utils.file_util import get_user_password
-from ..utils.time_util import get_standard_str, get_today_arrow
 
 
 class Dida365:
@@ -43,13 +41,12 @@ class Dida365:
         self._get_projects()
         self._get_task()
 
-    def search(self, keyword):
+    def search(self, keyword: str):
         url = self.base_url + "/search/all"
         params = {"keywords": keyword}
         r = self.session.get(url, headers=self.headers, params=params)
         r.raise_for_status()
-        print(r, r.content)
-        print(json.loads(r.content))
+        return r.json()
 
     def enrich_info(self):
         self._enrich_task_info()

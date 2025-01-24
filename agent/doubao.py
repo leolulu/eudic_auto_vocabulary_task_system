@@ -5,11 +5,14 @@ from volcenginesdkarkruntime import Ark
 class Doubao:
     def __init__(self, api_key, access_point, system_message: Optional[str] = None):
         self.access_point = access_point
-        self.system_message = system_message
+        self.add_system_message(system_message)
         self.client = Ark(
             api_key=api_key,
         )
         self.preserve_messages = []
+
+    def add_system_message(self, message):
+        self.system_message = message
 
     def construct_user_message(self, message):
         return {"role": "user", "content": message}
