@@ -43,6 +43,14 @@ class Dida365:
         self._get_projects()
         self._get_task()
 
+    def search(self, keyword):
+        url = self.base_url + "/search/all"
+        params = {"keywords": keyword}
+        r = self.session.get(url, headers=self.headers, params=params)
+        r.raise_for_status()
+        print(r, r.content)
+        print(json.loads(r.content))
+
     def enrich_info(self):
         self._enrich_task_info()
 
