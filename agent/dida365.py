@@ -1,9 +1,12 @@
-import json
+import re
+from time import sleep
 from typing import List, Optional, Tuple
-import uuid
+
 from constants.dida365 import VOCAB_BOOK_PROJECT_ID
 from dida365_project.api.dida365 import Dida365
 from dida365_project.models.task import Task
+from dida365_project.models.upload_attachment import uploadAttachment
+from dida365_project.utils.dictvoice_util import get_dictvoice_bytes
 
 
 class Dida365Agent:
@@ -36,6 +39,43 @@ class Dida365Agent:
         if parent_id:
             new_task_dict[Task.PARENT_ID] = parent_id
         self.dida.post_task(Task.gen_add_data_payload(new_task_dict))
+        # Upload attachment
+        task = self.find_task(title, if_reload_data=True)
+        task.add_upload_attachment_post_payload_by_bytes(*get_dictvoice_bytes(title))
+        self.dida.upload_attachment(*task.attachments_to_upload)
+        # put dictvoice ahead
+        self.rearrange_content_put_dictvoice_ahead(title)
+
+    def rearrange_content_put_dictvoice_ahead(self, title):
+        def rearrange_content(content, task, file_strings):
+            new_content = re.sub(uploadAttachment.FILE_PATTERN, "", content).strip()
+            new_content = "\n".join([new_content, "\n"] + file_strings)
+            task.update_content(new_content)
+            self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
+
+        print("Begin to rearrange content to put dictvoice behind.")
+        n = 0
+        max_retry_times = 30
+        while n < max_retry_times:
+            task = self.find_task(title, if_reload_data=True)
+            content = task.content
+            attachments = task.attachments
+            if re.search(uploadAttachment.FILE_PATTERN, content):
+                file_strings = re.findall(uploadAttachment.FILE_PATTERN, content)
+                rearrange_content(content, task, file_strings)
+                break
+            elif attachments:
+                file_strings = [i.content_file_string for i in attachments]
+                rearrange_content(content, task, file_strings)
+                break
+            else:
+                n += 1
+                print(f"Searching for {n} times.")
+                sleep(5)
+        if n >= max_retry_times:
+            print("Can't find attachments, content not rearranged.\n")
+        else:
+            print("Content rearranged, put dictvoice behind.\n")
 
     def update_task(self, task_dict):
         self.dida.post_task(Task.gen_update_data_payload(task_dict))
