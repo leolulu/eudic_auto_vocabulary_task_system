@@ -71,7 +71,7 @@ class Bearer:
 if __name__ == "__main__":
     b = Bearer()
 
-    schedule.every(1).days.do(b.bear_eudic_to_dida365)
+    schedule.every(1).hours.do(b.bear_eudic_to_dida365)
     schedule.every(10).seconds.do(b.answer_question)
 
     while True:
