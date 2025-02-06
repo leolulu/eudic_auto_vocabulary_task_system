@@ -29,7 +29,9 @@ class Dida365Agent:
         tags: Optional[list] = None,
         parent_id: Optional[str] = None,
     ):
-        new_task_dict = self.find_task("模板任务一").task_dict
+        template_task = self.find_task("模板任务一")
+        template_task.change_start_date_to_today()
+        new_task_dict = template_task.task_dict
         new_task_dict[Task.PROJECT_ID] = project_id
         new_task_dict[Task.TITLE] = title
         new_task_dict[Task.CONTENT] = content
