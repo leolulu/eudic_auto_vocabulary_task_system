@@ -6,7 +6,7 @@ import schedule
 
 from agent.agent import Agent
 from constants.dida365 import QUESTION_PREFIX, QUESTION_SUFFIX, VOCAB_BOOK_PROJECT_ID
-from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_WORD
+from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
 from constants.yaml import ANKI_PUSH_ENDPOINT
 from dida365_project.models.task import Task
 from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
@@ -55,14 +55,14 @@ class Bearer:
                     "{}{}{}".format(
                         re.sub(QUESTION_PREFIX + r"(.*?)" + QUESTION_SUFFIX, "", task.content),
                         "-" * 30,
-                        "以上是问题的背景信息，在回答问题的时候可以作为参考。\n重要格式要求：不要分段分行，所有回答内容都在一行内写完，重点信息加粗。\n",
+                        USER_ASK_EXP,
                     )
                 )
                 answer = self.agent.doubao.chat(question)
                 task.update_content(
                     task.content.replace(
                         f"{QUESTION_PREFIX}{question}{QUESTION_SUFFIX}",
-                        f"【【【Q:{question}    A:{answer}】】】",
+                        f"➡️Q:{question} ↔️ A:{answer}⬅️",
                     )
                 )
             self.agent.dida.update_task(task.task_dict)
