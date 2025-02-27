@@ -1,5 +1,6 @@
 import re
 import time
+import traceback
 from typing import List, Tuple
 
 import schedule
@@ -34,8 +35,16 @@ class Bearer:
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={word.word}" + ")"
-            self.agent.dida.add_task(word.word, content)
-            add_word_to_his_set(word.word)
+            try:
+                self.agent.dida.add_task(word.word, content)
+            except:
+                traceback.print_exc()
+            finally:
+                try:
+                    self.agent.dida.find_task(word.word, if_reload_data=True)
+                    add_word_to_his_set(word.word)
+                except:
+                    pass
 
     def search_questions(self):
         self.agent.dida.dida.get_latest_data()
