@@ -43,41 +43,43 @@ class Dida365Agent:
         self.dida.post_task(Task.gen_add_data_payload(new_task_dict))
         # Upload attachment
         task = self.find_task(title, if_reload_data=True)
-        task.add_upload_attachment_post_payload_by_bytes(*get_dictvoice_bytes(title))
-        self.dida.upload_attachment(*task.attachments_to_upload)
-        # put dictvoice ahead
-        self.rearrange_content_put_dictvoice_ahead(title)
+        self._gen_dictvoice_and_upload_to_task_and_rearrange_content(task)
+
+    def get_attachment_file_strings_from_task(self, task: Task) -> Optional[List[str]]:
+        n = 0
+        max_retry_times = 2
+        while n < max_retry_times:
+            content = task.content
+            attachments = task.attachments
+            if re.search(uploadAttachment.FILE_PATTERN, content):
+                file_strings = re.findall(uploadAttachment.FILE_PATTERN, content)
+                return file_strings
+            elif attachments:
+                file_strings = [i.content_file_string for i in attachments]
+                return file_strings
+            else:
+                n += 1
+                sleep(5)
+        return None
 
     def rearrange_content_put_dictvoice_ahead(self, title):
-        def rearrange_content(content, task, file_strings):
-            new_content = re.sub(uploadAttachment.FILE_PATTERN, "", content).strip()
+        def rearrange_content(task, file_strings):
+            new_content = re.sub(uploadAttachment.FILE_PATTERN, "", task.content).strip()
             new_content = "\n".join([new_content, "\n"] + file_strings)
             task.update_content(new_content)
             self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
 
         print("Begin to rearrange content to put dictvoice behind.")
-        n = 0
-        max_retry_times = 30
-        while n < max_retry_times:
-            task = self.find_task(title, if_reload_data=True)
-            content = task.content
-            attachments = task.attachments
-            if re.search(uploadAttachment.FILE_PATTERN, content):
-                file_strings = re.findall(uploadAttachment.FILE_PATTERN, content)
-                rearrange_content(content, task, file_strings)
-                break
-            elif attachments:
-                file_strings = [i.content_file_string for i in attachments]
-                rearrange_content(content, task, file_strings)
-                break
-            else:
-                n += 1
-                print(f"Searching for {n} times.")
-                sleep(5)
-        if n >= max_retry_times:
-            print("Can't find attachments, content not rearranged.\n")
+        task = self.find_task(title, if_reload_data=True)
+        file_strings = self.get_attachment_file_strings_from_task(task)
+        if file_strings:
+            try:
+                rearrange_content(task, file_strings)
+                print("Content rearranged, put dictvoice behind.")
+            except Exception as e:
+                print(f"Error occurred when rearranging content: {e}")
         else:
-            print("Content rearranged, put dictvoice behind.\n")
+            print("Can't find attachments, content not rearranged.")
 
     def update_task(self, task_dict):
         self.dida.post_task(Task.gen_update_data_payload(task_dict))
@@ -96,8 +98,24 @@ class Dida365Agent:
             )
         self.dida.adjust_task_parent(payload)
 
-    def search(self, keyword: str):
+    def search(self, keyword: str, project_id=None) -> List[Task]:
         result = self.dida.search(keyword)
         tasks = [Task(t) for t in result["tasks"]]
         active_tasks = [t for t in tasks if t.status == Task.STATUS_ACTIVE]
+        if project_id:
+            active_tasks = [t for t in active_tasks if t.project_id == project_id]
         return active_tasks
+
+    def _gen_dictvoice_and_upload_to_task_and_rearrange_content(self, task: Task):
+        task.add_upload_attachment_post_payload_by_bytes(*get_dictvoice_bytes(task.title))
+        self.dida.upload_attachment(*task.attachments_to_upload)
+        self.rearrange_content_put_dictvoice_ahead(task.title)
+
+    def fix_pronunciation_missing(self):
+        self.dida.get_latest_data()
+        active_task_in_vocab_book = [t for t in self.dida.active_tasks if t.project_id == VOCAB_BOOK_PROJECT_ID]
+        for task in active_task_in_vocab_book:
+            if not self.get_attachment_file_strings_from_task(task):
+                print(f'Found task which missing pronunciation: "{task.title}", begin to fix.')
+                self._gen_dictvoice_and_upload_to_task_and_rearrange_content(task)
+                print(f'"{task.title}"\'s missing problem has been fixed.')

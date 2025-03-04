@@ -78,7 +78,7 @@ class Dida365:
         r = self.session.request("POST", url, headers=self.headers, data=data)
         r.raise_for_status()
 
-    @retry(wait_fixed=60 * 1000, stop_max_attempt_number=30)
+    @retry(wait_fixed=4000, stop_max_attempt_number=5)
     def upload_attachment(self, *attachments: uploadAttachment):
         for attachment in attachments:
             url = "https://api.dida365.com/api/v1/attachment/upload/{project_id}/{task_id}/{uuid}".format(
