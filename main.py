@@ -2,6 +2,7 @@ import re
 import time
 import traceback
 from typing import List, Tuple
+from urllib.parse import quote
 
 import schedule
 
@@ -34,7 +35,7 @@ class Bearer:
         print(f"添加单词本生词:{words}")
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
-            content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={word.word}" + ")"
+            content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
             try:
                 self.agent.dida.add_task(word.word, content)
             except:
