@@ -69,6 +69,7 @@ class Bearer:
                     )
                 )
                 answer = self.agent.doubao.chat(question)
+                answer = answer.strip()
                 task.update_content(
                     task.content.replace(
                         f"{QUESTION_PREFIX}{question}{QUESTION_SUFFIX}",
