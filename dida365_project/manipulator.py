@@ -118,7 +118,7 @@ class DidaManipulator:
             i = -(i+1)
             overdue_tasks.extend(self._get_target_words_task(i))
         for task in overdue_tasks:
-            print(f"Renew task[{task.title}], start date: {task.start_date}")
+            print(f"Renew task[{task.title}], original start date: {task.start_date}")
             task.change_start_date_to_today()
             self.dida.post_task(Task.gen_update_date_payload(task.task_dict))
 
