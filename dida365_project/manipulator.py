@@ -112,41 +112,13 @@ class DidaManipulator:
         self.dida.upload_attachment(*task.attachments_to_upload)
         print("Dictvoice added.")
 
+    def renew_overdue_task(self):
+        overdue_tasks: list[Task] = []
+        for i in range(3):
+            i = -(i+1)
+            overdue_tasks.extend(self._get_target_words_task(i))
+        for task in overdue_tasks:
+            print(f"Renew task[{task.title}], start date: {task.start_date}")
+            task.change_start_date_to_today()
+            self.dida.post_task(Task.gen_update_date_payload(task.task_dict))
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-n", "--new", help="Add single new ebbinghaus task with the word specific", type=str)
-    parser.add_argument(
-        "-f", "--new_from_file", help="Add multiple new ebbinghaus tasks using a words.txt file at given path.", action="store_true"
-    )
-    parser.add_argument("-b", "--backlink", help="If build backlink", action="store_true")
-    parser.add_argument("-p", "--perpetuate", help="If perpetuate completed tasks.", action="store_true")
-    parser.add_argument("-r", "--reallocate", help="If reallocate tasks.", action="store_true")
-    parser.add_argument("-o", "--renew", help="If renew overdue tasks.", action="store_true")
-    parser.add_argument("-a", "--add_dictvoice", help="Add dictvoice to existing task.", type=str)
-    parser.add_argument(
-        "-d", "--default", help="If run default procedure: 1.perpetuate_task 2.build_backlink 3.reallocate_task.", action="store_true"
-    )
-    parser.add_argument("--full_scan_closed_task", help="Scan all closed tasks, otherwise only within 7 days.", action="store_true")
-    parser.add_argument(
-        "--start_day_offset",
-        help='Choose reallocation task target date, could be one of "yesterday", "today", "tomarrow"',
-        default="tomarrow",
-        type=str,
-    )
-    parser.add_argument(
-        "--selector",
-        help='Choose reallocation task selector, could be one of "random_sample", "earliest_start_date", "early_group_round_robin"',
-        default="early_group_round_robin",
-        type=str,
-    )
-    parser.add_argument("--quantity_limit", help="Quantity limit for reallocation task", default=20, type=int)
-    parser.add_argument(
-        "--new_task_file_path",
-        help="The path of words.txt file for creating new tasks",
-        type=str,
-        default=os.path.join(Path.home(), "Downloads", "words.txt"),
-    )
-    args = parser.parse_args()
-    dm = DidaManipulator(args)
-    dm.run()

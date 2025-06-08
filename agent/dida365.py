@@ -119,3 +119,6 @@ class Dida365Agent:
                 print(f'Found task which missing pronunciation: "{task.title}", begin to fix.')
                 self._gen_dictvoice_and_upload_to_task_and_rearrange_content(task)
                 print(f'"{task.title}"\'s missing problem has been fixed.')
+
+    def renew_overdue_task(self):
+        self.dida.renew_overdue_task()
