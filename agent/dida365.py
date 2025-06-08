@@ -4,9 +4,11 @@ from typing import List, Optional, Tuple
 
 from constants.dida365 import VOCAB_BOOK_PROJECT_ID
 from dida365_project.api.dida365 import Dida365
+from dida365_project.manipulator import DidaManipulator
 from dida365_project.models.task import Task
 from dida365_project.models.upload_attachment import uploadAttachment
 from dida365_project.utils.dictvoice_util import get_dictvoice_bytes
+from dida365_project.utils.time_util import get_days_offset, get_today_arrow
 
 
 class Dida365Agent:
@@ -120,5 +122,28 @@ class Dida365Agent:
                 self._gen_dictvoice_and_upload_to_task_and_rearrange_content(task)
                 print(f'"{task.title}"\'s missing problem has been fixed.')
 
+    def _get_target_words_task(self, start_day_offset):
+        def condition(task: Task):
+            return (
+                task.repeat_flag
+                and task.start_date
+                and re.search(r".*FORGETTINGCURVE.*", task.repeat_flag)
+                and get_days_offset(task.start_date, get_today_arrow()) == start_day_offset
+            )
+
+        tasks = filter(
+            lambda task: re.search(r".*" + DidaManipulator.PROJECT_WORDS.decode("utf-8") + r"$", str(task.project_name)),
+            self.dida.active_tasks,
+        )
+        tasks = filter(lambda task: condition(task), tasks)
+        return list(tasks)
+
     def renew_overdue_task(self):
-        self.dida.renew_overdue_task()
+        overdue_tasks: list[Task] = []
+        for i in range(3):
+            i = -(i + 1)
+            overdue_tasks.extend(self._get_target_words_task(i))
+        for task in overdue_tasks:
+            print(f"Renew task[{task.title}], start date: {task.start_date}")
+            task.change_start_date_to_today()
+            self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
