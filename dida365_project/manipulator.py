@@ -76,8 +76,6 @@ class DidaManipulator:
                 self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
                 print(f"Reset backlink in task: {task.title}")
 
-
-
     def _add_new_ebbinghaus_tasks(self, words):
         template_task = self.find_task("模板版本二")
         for word in words:
@@ -101,7 +99,6 @@ class DidaManipulator:
         if hasattr(BaiduFanyi, "EDGE_BROWSER"):
             BaiduFanyi.EDGE_BROWSER.close()
 
-
     def add_dictvoice_existing_task(self):
         task_title = self.args.add_dictvoice.strip()
         query_word = task_title
@@ -111,14 +108,3 @@ class DidaManipulator:
         task.add_upload_attachment_post_payload_by_bytes(*get_dictvoice_bytes(query_word))
         self.dida.upload_attachment(*task.attachments_to_upload)
         print("Dictvoice added.")
-
-    def renew_overdue_task(self):
-        overdue_tasks: list[Task] = []
-        for i in range(3):
-            i = -(i+1)
-            overdue_tasks.extend(self._get_target_words_task(i))
-        for task in overdue_tasks:
-            print(f"Renew task[{task.title}], original start date: {task.start_date}")
-            task.change_start_date_to_today()
-            self.dida.post_task(Task.gen_update_date_payload(task.task_dict))
-
