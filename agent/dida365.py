@@ -66,17 +66,17 @@ class Dida365Agent:
     def rearrange_content_put_dictvoice_ahead(self, title):
         def rearrange_content(task, file_strings):
             new_content = re.sub(uploadAttachment.FILE_PATTERN, "", task.content).strip()
-            new_content = "\n".join([new_content, "\n"] + file_strings)
+            new_content = "\n".join(file_strings + ["", new_content])    # ""是为了产生一个空行，如果使用"\n"的话，则会导致产生两个空行
             task.update_content(new_content)
             self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
 
-        print("Begin to rearrange content to put dictvoice behind.")
+        print("Begin to rearrange content to put dictvoice ahead.")
         task = self.find_task(title, if_reload_data=True)
         file_strings = self.get_attachment_file_strings_from_task(task)
         if file_strings:
             try:
                 rearrange_content(task, file_strings)
-                print("Content rearranged, put dictvoice behind.")
+                print("Content rearranged, put dictvoice ahead.")
             except Exception as e:
                 print(f"Error occurred when rearranging content: {e}")
         else:
