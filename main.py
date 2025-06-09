@@ -84,6 +84,7 @@ if __name__ == "__main__":
 
     schedule.every(1).minutes.do(b.bear_eudic_to_dida365)
     schedule.every(10).seconds.do(b.answer_question)
+    schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
 
     while True:
         schedule.run_pending()
