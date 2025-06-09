@@ -2,9 +2,8 @@ import re
 from time import sleep
 from typing import List, Optional, Tuple
 
-from constants.dida365 import VOCAB_BOOK_PROJECT_ID
+from constants.dida365 import PROJECT_WORDS, VOCAB_BOOK_PROJECT_ID
 from dida365_project.api.dida365 import Dida365
-from dida365_project.manipulator import DidaManipulator
 from dida365_project.models.task import Task
 from dida365_project.models.upload_attachment import uploadAttachment
 from dida365_project.utils.dictvoice_util import get_dictvoice_bytes
@@ -132,7 +131,7 @@ class Dida365Agent:
             )
 
         tasks = filter(
-            lambda task: re.search(r".*" + DidaManipulator.PROJECT_WORDS.decode("utf-8") + r"$", str(task.project_name)),
+            lambda task: re.search(r".*" + PROJECT_WORDS.decode("utf-8") + r"$", str(task.project_name)),
             self.dida.active_tasks,
         )
         tasks = filter(lambda task: condition(task), tasks)
