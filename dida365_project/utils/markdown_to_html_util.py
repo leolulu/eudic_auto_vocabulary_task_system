@@ -13,7 +13,6 @@ def markdown_to_html(markdown_text: str) -> str:
     - 表格 (并附带现代化 CSS 样式)
     - 链接和图片
     - 删除线 (~~)
-    - 代码块 (多行和行内)
     - 引用块（支持内部空行）
     - 正确的段落和换行 (<br>)
     """
