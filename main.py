@@ -12,8 +12,8 @@ from agent.agent import Agent
 from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
 from constants.yaml import ANKI_PUSH_ENDPOINT
 from dida365_project.models.task import Task
-from dida365_project.utils.markdown_to_html_util import markdown_to_html
 from models.anki import UserQuery
+from utils.markdown_to_html_util import markdown_to_html
 from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
 from utils.yaml_config_manager import YamlConfigManager
 
