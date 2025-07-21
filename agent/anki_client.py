@@ -19,9 +19,9 @@ class AnkiClient:
         res.raise_for_status()
         return res.json()
 
-    def add_note(self, word: str):
+    def add_note(self, word: str, content: str):
         endpoint = f"{self.url}/add_note"
-        res = requests.post(endpoint, json={"word": word})
+        res = requests.post(endpoint, json={"word": word, "content": content})
         res.raise_for_status()
         return res.json()
 
