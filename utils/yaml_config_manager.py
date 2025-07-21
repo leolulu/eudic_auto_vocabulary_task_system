@@ -5,10 +5,10 @@ import yaml
 from constants.yaml import (
     ANKI_PUSH_ENDPOINT,
     CONFIG_FILE_NAME,
+    DIDA365_PASSWORD,
+    DIDA365_USERNAME,
     DOUBAO_WEBSERVER_ENDPOINT,
     EUDIC_API_KEY,
-    DIDA365_USERNAME,
-    DIDA365_PASSWORD,
 )
 
 
@@ -18,7 +18,7 @@ class YamlConfigManager:
         DOUBAO_WEBSERVER_ENDPOINT: "请输入豆包API地址",
         DIDA365_USERNAME: "请输入Dida365用户名",
         DIDA365_PASSWORD: "请输入Dida365密码",
-        ANKI_PUSH_ENDPOINT: "请输入Anki添加新词的API地址",
+        ANKI_PUSH_ENDPOINT: "请输入Anki后端API地址",
     }
 
     def __init__(self, config_file_path=CONFIG_FILE_NAME) -> None:

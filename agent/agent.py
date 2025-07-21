@@ -1,8 +1,8 @@
+from agent.anki_client import AnkiClient
 from agent.dida365 import Dida365Agent
-from agent.doubao import Doubao
 from agent.doubao_online import DoubaoOnline
 from agent.eudic import Eudic
-from constants.yaml import DIDA365_PASSWORD, DIDA365_USERNAME, DOUBAO_WEBSERVER_ENDPOINT, EUDIC_API_KEY
+from constants.yaml import ANKI_PUSH_ENDPOINT, DIDA365_PASSWORD, DIDA365_USERNAME, DOUBAO_WEBSERVER_ENDPOINT, EUDIC_API_KEY
 from dida365_project.api.dida365 import Dida365 as Dida365Api
 from utils.yaml_config_manager import YamlConfigManager
 
@@ -13,6 +13,7 @@ class Agent:
         self.dida = self.get_dida()
         self.doubao = self.get_doubao()
         self.eudic = self.get_eudic()
+        self.anki_client = self.get_anki_client()
 
     def get_dida(self):
         return Dida365Agent(
@@ -38,3 +39,6 @@ class Agent:
         #     access_point=self.config_manager.get_config(DOUBAO_MODEL_ACCESS_POINT),
         # )
         self.doubao = DoubaoOnline(endpoint=self.config_manager.get_config(DOUBAO_WEBSERVER_ENDPOINT))
+
+    def get_anki_client(self):
+        return AnkiClient(endpoint_url=self.config_manager.get_config(ANKI_PUSH_ENDPOINT))

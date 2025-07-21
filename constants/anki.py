@@ -1,0 +1,2 @@
+QUESTION_PREFIX = "::"
+QUESTION_SUFFIX = "::"
