@@ -114,6 +114,7 @@ class Bearer:
             )
             answer = self.agent.doubao.chat(user_query.query)
             answer = answer.strip()
+            answer = re.sub(r"\*\*\*\*(.*?)\*\*\*\*", r"<b><i>\1</i></b>", answer)
             answer = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", answer)
             answer = re.sub(r"\*(.*?)\*", r"<i>\1</i>", answer)
             user_query.note_content = user_query.note_content.replace(
