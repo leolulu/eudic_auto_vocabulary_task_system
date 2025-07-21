@@ -265,8 +265,8 @@ def _get_global_styles() -> str:
         # --- 标题样式 ---
         "h1, h2, h3, h4, h5, h6 { "
         "color: #228B22; "  # 标题使用主题色
-        "margin-top: 2em; "
-        "margin-bottom: 0.8em; "
+        "margin-top: 0em; "
+        "margin-bottom: 0em; "
         "font-weight: 600; "
         "} "
         "h1 { border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3em; }"
@@ -274,7 +274,7 @@ def _get_global_styles() -> str:
         # --- 表格wrapper样式 ---
         ".table-wrapper { "
         "overflow-x: auto; "  # 这是核心！当内容溢出时，在水平方向显示滚动条
-        "margin: 2em 0; "  # 将外边距从表格移到这里
+        "margin: 0em 0; "  # 将外边距从表格移到这里
         "-webkit-overflow-scrolling: touch; "  # 在 iOS 上提供更平滑的滚动体验
         "} "
         # --- 表格样式 (已更新为森林绿表头) ---
@@ -295,7 +295,7 @@ def _get_global_styles() -> str:
         "font-weight: bold; "
         "} "
         ".md-table th, .md-table td { "
-        "padding: 14px 18px; "
+        "padding: 0px 0px; "
         "border: none; "  # 移除内部边框，更现代
         "border-bottom: 1px solid #e0e0e0; "  # 使用底部边框分割行
         "} "
