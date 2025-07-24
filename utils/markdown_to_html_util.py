@@ -271,6 +271,9 @@ def _get_global_styles() -> str:
         "} "
         "h1 { border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3em; }"
         "h2 { border-bottom: 1px solid #e0e0e0; padding-bottom: 0.3em; }"
+        # --- 列表样式 (减少缩进) ---
+        "ul, ol { padding-left: 30px; }"  # 减少列表的默认缩进
+        "li > ul, li > ol { padding-left: 15px; }"  # 嵌套列表的缩进更少
         # --- 表格wrapper样式 ---
         ".table-wrapper { "
         "overflow-x: auto; "  # 这是核心！当内容溢出时，在水平方向显示滚动条
