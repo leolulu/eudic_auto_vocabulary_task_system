@@ -255,12 +255,10 @@ def _get_global_styles() -> str:
         "a { "
         "color: #28a745; "
         "text-decoration: none; "
-        "border-bottom: 1px dotted #28a745; "
         "transition: all 0.2s ease-in-out; "
         "} "
         "a:hover { "
         "color: #228B22; "
-        "border-bottom: 1px solid #228B22; "
         "} "
         # --- 标题样式 ---
         "h1, h2, h3, h4, h5, h6 { "
