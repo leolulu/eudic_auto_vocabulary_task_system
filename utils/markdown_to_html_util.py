@@ -118,9 +118,8 @@ def markdown_to_html(markdown_text: str) -> str:
         # 如果是空行，直接跳过
         i += 1
 
-    # 添加全局样式（只添加一次）
-    styles = _get_global_styles()
-    final_html = styles + "\n".join(part for part in html_output if part)
+    # 不再添加全局样式
+    final_html = "\n".join(part for part in html_output if part)
     return final_html.replace("\n", "").strip()
 
 
@@ -228,114 +227,6 @@ def _render_table(table_lines: list) -> str:
     html += "</div>"
 
     return html
-
-
-def _get_global_styles() -> str:
-    """
-    返回一个经过美化的、“Fancy”风格的全局内联CSS样式。
-    - 主题色: 森林绿 (#228B22)
-    - 设计感: 使用卡片式设计、阴影和渐变，增强视觉区分度。
-    """
-    # 森林绿: #228B22
-    # 辅助绿 (用于链接): #28a745
-    # 柔和背景: #fbfbfb
-    # 主要文本: #333333
-    # 边框/分割线: #e0e0e0
-    # 引用块背景: #f0fff0 (非常浅的薄荷绿)
-
-    return (
-        "<style>"
-        # --- 全局和基础样式 ---
-        "body { "
-        "background-color: #fbfbfb; "
-        'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; '
-        "line-height: 1.7; "
-        "color: #333333; "
-        "} "
-        "a { "
-        "color: #28a745; "
-        "text-decoration: none; "
-        "transition: all 0.2s ease-in-out; "
-        "} "
-        "a:hover { "
-        "color: #228B22; "
-        "} "
-        # --- 标题样式 ---
-        "h1, h2, h3, h4, h5, h6 { "
-        "color: #228B22; "  # 标题使用主题色
-        "margin-top: 0em; "
-        "margin-bottom: 0em; "
-        "font-weight: 600; "
-        "} "
-        "h1 { border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3em; }"
-        "h2 { border-bottom: 1px solid #e0e0e0; padding-bottom: 0.3em; }"
-        # --- 列表样式 (减少缩进) ---
-        "ul, ol { padding-left: 30px; }"  # 减少列表的默认缩进
-        "li > ul, li > ol { padding-left: 15px; }"  # 嵌套列表的缩进更少
-        # --- 表格wrapper样式 ---
-        ".table-wrapper { "
-        "overflow-x: auto; "  # 这是核心！当内容溢出时，在水平方向显示滚动条
-        "margin: 0em 0; "  # 将外边距从表格移到这里
-        "-webkit-overflow-scrolling: touch; "  # 在 iOS 上提供更平滑的滚动体验
-        "} "
-        # --- 表格样式 (已更新为森林绿表头) ---
-        ".md-table { "
-        "box-sizing: border-box; "
-        "width: 100%; "
-        "border-collapse: collapse; "
-        "font-family: inherit; "
-        "box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); "  # 增强阴影
-        "border-radius: 10px; "
-        "overflow: hidden; "
-        "border: 1px solid #e0e0e0; "
-        "} "
-        ".md-table thead tr { "
-        "background-color: #228B22; "  # <<< 这里是您指定的森林绿表头
-        "color: #ffffff; "
-        "text-align: left; "
-        "font-weight: bold; "
-        "} "
-        ".md-table th, .md-table td { "
-        "padding: 0px 0px; "
-        "border: none; "  # 移除内部边框，更现代
-        "border-bottom: 1px solid #e0e0e0; "  # 使用底部边框分割行
-        "} "
-        ".md-table tbody tr { "
-        "background-color: #ffffff; "
-        "transition: background-color 0.2s ease; "
-        "} "
-        ".md-table tbody tr:last-of-type { border-bottom: none; }"  # 最后一行无边框
-        ".md-table tbody tr:hover { "
-        "background-color: #f0fff0; "  # 悬停时变为非常浅的绿色
-        "} "
-        # --- 引用块样式 ---
-        "blockquote { "
-        "border-left: 5px solid #228B22; "  # 边框使用主题色
-        "padding: 15px 25px; "
-        "margin: 2em 0; "
-        "background-color: #f0fff0; "  # 背景使用极浅的薄荷绿
-        "color: #555555; "
-        "font-style: italic; "
-        "border-radius: 0 8px 8px 0; "
-        "} "
-        "blockquote p { margin: 0; }"
-        # --- 水平分割线样式 ---
-        "hr { "
-        "border: 0; "
-        "height: 2px; "
-        "background-image: linear-gradient(to right, transparent, #228B22, transparent); "  # 渐变效果
-        "} "
-        # --- 行内代码样式 ---
-        "p code, li code { "
-        "background-color: #e8e8e8; "
-        "border-radius: 4px; "
-        "padding: 3px 6px; "
-        'font-family: "Fira Code", "Courier New", monospace; '
-        "font-size: 0.9em; "
-        "color: #c7254e; "  # 保留了经典的洋红色以示区分
-        "} "
-        "</style>\n"
-    )
 
 
 # 测试示例
