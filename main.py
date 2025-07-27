@@ -119,7 +119,7 @@ class Bearer:
             answer = re.sub(r"\*(.*?)\*", r"<i>\1</i>", answer)
             user_query.note_content = user_query.note_content.replace(
                 f"{anki_constants.QUESTION_PREFIX}{user_query.query}{anki_constants.QUESTION_SUFFIX}",
-                f"➡️Q:{user_query.query} ⏩ A:{answer}⬅️",
+                f"⏭Q:{user_query.query} ⏺ A:{answer}⏮",
             )
             self.agent.anki_client.update_note_fields(user_query.id, {"答案": user_query.note_content})
 
