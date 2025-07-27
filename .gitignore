@@ -2,6 +2,7 @@ config.yaml
 /*.session
 word_his.db
 
+ttt.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

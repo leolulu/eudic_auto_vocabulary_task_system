@@ -128,6 +128,7 @@ if __name__ == "__main__":
     b = Bearer()
 
     schedule.every(1).minutes.do(b.bear_eudic_to_anki)
+    schedule.every(90).seconds.do(b.agent.anki_client.request_anki_to_sync)
     schedule.every(10).seconds.do(b.search_and_answer_questions_from_anki)
     schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
 

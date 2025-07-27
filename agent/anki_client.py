@@ -30,3 +30,9 @@ class AnkiClient:
         res = requests.get(endpoint, params={"title": title})
         res.raise_for_status()
         return res.json().get("found")
+
+    def request_anki_to_sync(self):
+        endpoint = f"{self.url}/sync_anki"
+        res = requests.get(endpoint)
+        res.raise_for_status()
+        return res.json()
