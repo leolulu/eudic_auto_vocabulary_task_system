@@ -127,9 +127,8 @@ class Bearer:
 if __name__ == "__main__":
     b = Bearer()
 
-    schedule.every(1).minutes.do(b.bear_eudic_to_anki)
-    schedule.every(3).minutes.do(b.agent.anki_client.request_anki_to_sync)
-    schedule.every(10).seconds.do(b.search_and_answer_questions_from_anki)
+    schedule.every(1).minutes.do(b.bear_eudic_to_dida365)
+    schedule.every(10).seconds.do(b.answer_question_from_dida365)
     schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
 
     while True:
