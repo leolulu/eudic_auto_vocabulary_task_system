@@ -1,9 +1,8 @@
 import requests
-from constants.eudic import GET_WORD_URL, VOCAB_BOOK_BASE_URL
-from constants.eudic import DEFAULT_VOCAB_BOOK_NAME, VOCAB_BOOK_ID, VOCAB_BOOK_NAME
+
+from constants.eudic import DEFAULT_VOCAB_BOOK_NAME, GET_WORD_URL, VOCAB_BOOK_BASE_URL, VOCAB_BOOK_ID, VOCAB_BOOK_NAME
 from constants.header import HEADER_AUTHORIZATION, HEADER_USER_AGENT
 from models.eudic_word import Word
-from utils.datetime_util import is_last_24h_range
 
 
 class Eudic:
@@ -45,7 +44,7 @@ class Eudic:
         try:
             res.raise_for_status()
         except:
-            print(res.json())
+            print(res.content)
             raise
 
         return [Word(w) for w in res.json()["data"]]
