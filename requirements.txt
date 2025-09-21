@@ -6,3 +6,4 @@ PyYAML
 arrow
 schedule
 volcengine-python-sdk
+pytest-playwright

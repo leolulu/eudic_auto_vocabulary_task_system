@@ -14,6 +14,7 @@ from constants.yaml import ANKI_PUSH_ENDPOINT
 from dida365_project.models.task import Task
 from models.anki import UserQuery
 from utils.markdown_to_html_util import markdown_to_html
+from utils.phonetic_util import get_all_phonetic
 from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
 from utils.yaml_config_manager import YamlConfigManager
 
@@ -40,6 +41,7 @@ class Bearer:
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
+            content = get_all_phonetic(word.word) + "\n" + content
             try:
                 self.agent.dida.add_task(word.word, content)
             except:  # noqa: E722
