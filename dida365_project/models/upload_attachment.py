@@ -15,22 +15,23 @@ class uploadAttachment:
 
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, uploadAttachment):
-            self_file_bytes = self.file_bytes if hasattr(self, 'file_bytes') else ""
-            self_file_path = self.file_path if hasattr(self, 'file_path') else ""
-            __o_file_bytes = __o.file_bytes if hasattr(__o, 'file_bytes') else ""
-            __o_file_path = __o.file_path if hasattr(__o, 'file_path') else ""
+            self_file_bytes = self.file_bytes if hasattr(self, "file_bytes") else ""
+            self_file_path = self.file_path if hasattr(self, "file_path") else ""
+            __o_file_bytes = __o.file_bytes if hasattr(__o, "file_bytes") else ""
+            __o_file_path = __o.file_path if hasattr(__o, "file_path") else ""
             return str(self_file_bytes) + str(self_file_path) == str(__o_file_bytes) + str(__o_file_path)
         else:
             return False
 
     def __hash__(self) -> int:
-        self_file_bytes = self.file_bytes if hasattr(self, 'file_bytes') else ""
-        self_file_path = self.file_path if hasattr(self, 'file_path') else ""
-        return hash(str(self_file_bytes)+str(self_file_path))
+        self_file_bytes = self.file_bytes if hasattr(self, "file_bytes") else ""
+        self_file_path = self.file_path if hasattr(self, "file_path") else ""
+        return hash(str(self_file_bytes) + str(self_file_path))
 
     def parse_file_bytes(self, file_bytes_obj):
         file_name, self.file_bytes = file_bytes_obj
-        self.file_name = file_name.lower()+'.mp3'
+        # 直接使用传入的文件名，不再添加扩展名
+        self.file_name = file_name.lower()
 
     def parse_file_path(self, file_path):
         self.file_path = file_path

@@ -1,6 +1,9 @@
+import io
 import re
 from time import sleep
 from typing import List, Optional, Tuple
+
+import requests
 
 from constants.dida365 import PROJECT_WORDS, VOCAB_BOOK_PROJECT_ID
 from dida365_project.api.dida365 import Dida365
@@ -8,6 +11,7 @@ from dida365_project.models.task import Task
 from dida365_project.models.upload_attachment import uploadAttachment
 from dida365_project.utils.dictvoice_util import get_dictvoice_bytes
 from dida365_project.utils.time_util import get_days_offset, get_today_arrow
+from utils.phonetic_util import query_word_explanation_video
 
 
 class Dida365Agent:
@@ -66,7 +70,7 @@ class Dida365Agent:
     def rearrange_content_put_dictvoice_ahead(self, title):
         def rearrange_content(task, file_strings):
             new_content = re.sub(uploadAttachment.FILE_PATTERN, "", task.content).strip()
-            new_content = "\n".join(file_strings + ["", new_content])    # ""是为了产生一个空行，如果使用"\n"的话，则会导致产生两个空行
+            new_content = "\n".join(file_strings + ["", new_content])  # ""是为了产生一个空行，如果使用"\n"的话，则会导致产生两个空行
             task.update_content(new_content)
             self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
 
@@ -107,8 +111,50 @@ class Dida365Agent:
             active_tasks = [t for t in active_tasks if t.project_id == project_id]
         return active_tasks
 
+    def _get_task_attachments_bytes(self, word: str) -> list[tuple]:
+        """获取任务附件的字节数据（语音和视频）"""
+
+        def download_video(url: str) -> Optional[Tuple[str, io.BytesIO]]:
+            """下载视频并返回文件名和字节流"""
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(url)
+                    response.raise_for_status()
+
+                    # 从URL提取文件名
+                    filename = url.split("/")[-1]
+                    if not re.search(r"\.\w+$", filename):
+                        filename += ".mp4"
+
+                    return (filename, io.BytesIO(response.content))
+                except Exception as e:
+                    print(f"下载视频失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:  # 不是最后一次尝试
+                        sleep(2**attempt)  # 指数退避
+                    else:
+                        return None
+
+        result = []
+
+        # 添加语音文件
+        voice_files = get_dictvoice_bytes(word)
+        result.extend(voice_files)
+
+        # 添加视频文件
+        video_urls = query_word_explanation_video(word)
+        if video_urls:
+            for url in video_urls:
+                video_file = download_video(url)
+                if video_file:
+                    result.append(video_file)
+
+        return result
+
     def _gen_dictvoice_and_upload_to_task_and_rearrange_content(self, task: Task):
-        task.add_upload_attachment_post_payload_by_bytes(*get_dictvoice_bytes(task.title))
+        # 使用新的语音+视频处理函数
+        file_bytes_objs = self._get_task_attachments_bytes(task.title)
+        task.add_upload_attachment_post_payload_by_bytes(*file_bytes_objs)
         self.dida.upload_attachment(*task.attachments_to_upload)
         self.rearrange_content_put_dictvoice_ahead(task.title)
 
