@@ -103,5 +103,30 @@ def get_all_phonetic(word: str) -> str:
         return result
 
 
+def query_word_explanation_video(word: str) -> list[str] | None:
+    url = f"https://fanyi.baidu.com/mtpe-individual/transText?query={word}&lang=en2zh"
+    video_urls = set()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, wait_until="networkidle", timeout=120000)
+
+        video_elements = page.query_selector_all("video")
+        for video_element in video_elements:
+            src = video_element.get_attribute("src")
+            if src:
+                video_urls.add(src)
+            else:
+                sources = video_element.query_selector_all("source")
+                for source in sources:
+                    src = source.get_attribute("src")
+                    if src:
+                        video_urls.add(src)
+        browser.close()
+    return list(video_urls)
+
+
 if __name__ == "__main__":
-    print(get_all_phonetic("Assumi"))
+    word = "all"
+    print(get_all_phonetic(word))
+    print(query_word_explanation_video(word))
