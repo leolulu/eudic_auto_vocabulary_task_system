@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 import requests
 
 from constants.dida365 import PROJECT_WORDS, VOCAB_BOOK_PROJECT_ID
+from constants.header import HEADER_CHROME_UA
 from dida365_project.api.dida365 import Dida365
 from dida365_project.models.task import Task
 from dida365_project.models.upload_attachment import uploadAttachment
@@ -119,7 +120,8 @@ class Dida365Agent:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    response = requests.get(url)
+                    headers = {"User-Agent": HEADER_CHROME_UA}
+                    response = requests.get(url, headers=headers)
                     response.raise_for_status()
 
                     # 从URL提取文件名
