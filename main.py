@@ -41,7 +41,7 @@ class Bearer:
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
-            content = get_all_phonetic(word.word) + "\n" + content
+            content = get_all_phonetic(word.word) + "\n\n" + content
             try:
                 self.agent.dida.add_task(word.word, content)
             except:  # noqa: E722
