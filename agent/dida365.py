@@ -131,7 +131,7 @@ class Dida365Agent:
 
                     return (filename, io.BytesIO(response.content))
                 except Exception as e:
-                    print(f"下载视频失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+                    print(f"下载视频失败 [URL: {url}] (尝试 {attempt + 1}/{max_retries}): {e}")
                     if attempt < max_retries - 1:  # 不是最后一次尝试
                         sleep(2**attempt)  # 指数退避
                     else:
@@ -145,10 +145,13 @@ class Dida365Agent:
 
         # 添加视频文件
         video_urls = query_word_explanation_video(word)
-        if video_urls:
+        if not video_urls:
+            print(f"警告: 单词 '{word}' 无视频资源")
+        else:
             for url in video_urls:
                 video_file = download_video(url)
                 if video_file:
+                    print(f"✅ 视频下载成功: {video_file[0]}")
                     result.append(video_file)
 
         return result
