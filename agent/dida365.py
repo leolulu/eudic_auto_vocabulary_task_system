@@ -90,6 +90,12 @@ class Dida365Agent:
     def update_task(self, task_dict):
         self.dida.post_task(Task.gen_update_data_payload(task_dict))
 
+    def deactivate_task_attachments(self, task_title: str, attachment_ids: List[str], if_reload_data=True):
+        task = self.find_task(task_title, if_reload_data=if_reload_data)
+        for attachment_id in attachment_ids:
+            task.mark_attachment_inactive(attachment_id)
+        self.dida.post_task(Task.gen_attachment_inactive_payload(task.task_dict))
+
     def adjust_task_parent(self, task_name_to_parent_name: List[Tuple[str, str]]):
         payload = []
         for task_name, parent_name in task_name_to_parent_name:

@@ -134,6 +134,25 @@ class Task:
         self.content = content
         self.task_dict[Task.CONTENT] = self.content
 
+    def mark_attachment_inactive(self, attachment_id: str):
+        attachments = self.task_dict.get(Task.ATTACHMENTS) or []
+        found = False
+        for attachment in attachments:
+            if attachment.get(Attachment.ID) == attachment_id:
+                attachment[Attachment.STATUS] = 1
+                found = True
+                break
+        if not found:
+            raise ValueError(f"Attachment [{attachment_id}] not found in task [{self.id}]")
+        self._load_field_attachments()
+
+    @staticmethod
+    def gen_attachment_inactive_payload(task_dict):
+        payload = Task._gen_post_task_payload()
+        payload["update"] = [task_dict]
+        payload["updateAttachments"] = [task_dict]
+        return payload
+
     def add_upload_attachment_post_payload_by_path(self, file_path):
         self.attachments_to_upload.add(uploadAttachment(self, file_path == file_path))
 
