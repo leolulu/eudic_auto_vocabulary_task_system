@@ -133,6 +133,6 @@ if __name__ == "__main__":
     schedule.every(10).seconds.do(b.answer_question_from_dida365)
     schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
 
-    for _ in range(86400):  # 只运行24小时
+    for _ in range(3600):  # 只运行1小时
         schedule.run_pending()
         time.sleep(1)
