@@ -22,8 +22,8 @@ class Bearer:
     def __init__(self) -> None:
         self.agent = Agent()
 
-    def acquire_words(self, days: int = 1):
-        words = self.agent.eudic.get_words_in_book()
+    def acquire_words(self, days: int):
+        words = self.agent.eudic.get_words_in_book(days=days)
         words = [w for w in words if w.is_in_last_days_range(days)]
         words = [w for w in words if not if_exists_in_his_set(w.word)]
         return list(words)
