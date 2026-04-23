@@ -36,7 +36,7 @@ class Bearer:
 
     def bear_eudic_to_dida365(self):
         """deprecated"""
-        words = self.acquire_words(2)
+        words = self.acquire_words(7)
         print(f"添加单词本生词:{words}")
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
@@ -54,7 +54,7 @@ class Bearer:
                     pass
 
     def bear_eudic_to_anki(self):
-        words = self.acquire_words(2)
+        words = self.acquire_words(7)
         print(f"添加单词本生词:{words}")
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
