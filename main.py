@@ -1,7 +1,6 @@
 import re
 import time
 import traceback
-from typing import List, Tuple
 from urllib.parse import quote
 
 import schedule
@@ -70,7 +69,7 @@ class Bearer:
     def search_questions_from_dida365(self):
         """deprecated"""
         self.agent.dida.dida.get_latest_data()
-        task_with_question: List[Tuple[Task, List[str]]] = []
+        task_with_question: list[tuple[Task, list[str]]] = []
         for task in [t for t in self.agent.dida.dida.active_tasks if t.content and t.project_id == dida365_constants.VOCAB_BOOK_PROJECT_ID]:
             questions = [
                 q for q in re.findall(dida365_constants.QUESTION_PREFIX + r"(.*?)" + dida365_constants.QUESTION_SUFFIX, task.content) if q

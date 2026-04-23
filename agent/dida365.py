@@ -1,7 +1,8 @@
 import io
 import re
 from time import sleep
-from typing import List, Optional, Tuple
+
+
 
 import requests
 
@@ -32,8 +33,8 @@ class Dida365Agent:
         title,
         content,
         project_id=VOCAB_BOOK_PROJECT_ID,
-        tags: Optional[list] = None,
-        parent_id: Optional[str] = None,
+        tags: list | None = None,
+        parent_id: str | None = None,
     ):
         template_task = self.find_task("模板任务一")
         template_task.change_start_date_to_today()
@@ -51,7 +52,7 @@ class Dida365Agent:
         task = self.find_task(title, if_reload_data=True)
         self._gen_dictvoice_and_upload_to_task_and_rearrange_content(task)
 
-    def get_attachment_file_strings_from_task(self, task: Task) -> Optional[List[str]]:
+    def get_attachment_file_strings_from_task(self, task: Task) -> list[str] | None:
         n = 0
         max_retry_times = 2
         while n < max_retry_times:
@@ -90,13 +91,13 @@ class Dida365Agent:
     def update_task(self, task_dict):
         self.dida.post_task(Task.gen_update_data_payload(task_dict))
 
-    def deactivate_task_attachments(self, task_title: str, attachment_ids: List[str], if_reload_data=True):
+    def deactivate_task_attachments(self, task_title: str, attachment_ids: list[str], if_reload_data=True):
         task = self.find_task(task_title, if_reload_data=if_reload_data)
         for attachment_id in attachment_ids:
             task.mark_attachment_inactive(attachment_id)
         self.dida.post_task(Task.gen_attachment_inactive_payload(task.task_dict))
 
-    def adjust_task_parent(self, task_name_to_parent_name: List[Tuple[str, str]]):
+    def adjust_task_parent(self, task_name_to_parent_name: list[tuple[str, str]]):
         payload = []
         for task_name, parent_name in task_name_to_parent_name:
             task = self.find_task(task_name)
@@ -110,7 +111,7 @@ class Dida365Agent:
             )
         self.dida.adjust_task_parent(payload)
 
-    def search(self, keyword: str, project_id=None) -> List[Task]:
+    def search(self, keyword: str, project_id=None) -> list[Task]:
         result = self.dida.search(keyword)
         tasks = [Task(t) for t in result["tasks"]]
         active_tasks = [t for t in tasks if t.status == Task.STATUS_ACTIVE]
@@ -121,7 +122,7 @@ class Dida365Agent:
     def _get_task_attachments_bytes(self, word: str) -> list[tuple]:
         """获取任务附件的字节数据（语音和视频）"""
 
-        def download_video(url: str) -> Optional[Tuple[str, io.BytesIO]]:
+        def download_video(url: str) -> tuple[str, io.BytesIO] | None:
             """下载视频并返回文件名和字节流"""
             max_retries = 3
             for attempt in range(max_retries):

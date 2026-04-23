@@ -1,11 +1,10 @@
 import os
-from typing import Optional
 
 
 class uploadAttachment:
     FILE_PATTERN = r"(\!\[file\]\(.*?\))"
 
-    def __init__(self, task, file_bytes_obj: Optional[tuple] = None, file_path: Optional[str] = None) -> None:
+    def __init__(self, task, file_bytes_obj: tuple | None = None, file_path: str | None = None) -> None:
         self.task_id = task.id
         self.project_id = task.project_id
         if file_bytes_obj:
