@@ -1,7 +1,6 @@
 import re
 import time
 import traceback
-from typing import List, Tuple
 from urllib.parse import quote
 
 import schedule
@@ -23,8 +22,8 @@ class Bearer:
     def __init__(self) -> None:
         self.agent = Agent()
 
-    def acquire_words(self, days: int = 1):
-        words = self.agent.eudic.get_words_in_book()
+    def acquire_words(self, days: int):
+        words = self.agent.eudic.get_words_in_book(days=days)
         words = [w for w in words if w.is_in_last_days_range(days)]
         words = [w for w in words if not if_exists_in_his_set(w.word)]
         return list(words)
@@ -36,7 +35,7 @@ class Bearer:
 
     def bear_eudic_to_dida365(self):
         """deprecated"""
-        words = self.acquire_words(2)
+        words = self.acquire_words(7)
         print(f"添加单词本生词:{words}")
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
@@ -54,7 +53,7 @@ class Bearer:
                     pass
 
     def bear_eudic_to_anki(self):
-        words = self.acquire_words(2)
+        words = self.acquire_words(7)
         print(f"添加单词本生词:{words}")
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
@@ -70,7 +69,7 @@ class Bearer:
     def search_questions_from_dida365(self):
         """deprecated"""
         self.agent.dida.dida.get_latest_data()
-        task_with_question: List[Tuple[Task, List[str]]] = []
+        task_with_question: list[tuple[Task, list[str]]] = []
         for task in [t for t in self.agent.dida.dida.active_tasks if t.content and t.project_id == dida365_constants.VOCAB_BOOK_PROJECT_ID]:
             questions = [
                 q for q in re.findall(dida365_constants.QUESTION_PREFIX + r"(.*?)" + dida365_constants.QUESTION_SUFFIX, task.content) if q
@@ -133,6 +132,6 @@ if __name__ == "__main__":
     schedule.every(10).seconds.do(b.answer_question_from_dida365)
     schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
 
-    while True:
+    for _ in range(3600):  # 只运行1小时
         schedule.run_pending()
         time.sleep(1)

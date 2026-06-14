@@ -1,12 +1,11 @@
 from datetime import datetime
-from typing import Dict
 from zoneinfo import ZoneInfo
 
 from utils.datetime_util import is_last_x_days_range
 
 
 class Word:
-    def __init__(self, data_dict: Dict) -> None:
+    def __init__(self, data_dict: dict) -> None:
         self.word = data_dict["word"]
         self.explanation = data_dict["exp"]
         self.add_datetime: datetime = self._fix_timezone(data_dict["add_time"])
