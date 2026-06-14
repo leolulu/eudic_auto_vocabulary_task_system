@@ -10,61 +10,68 @@ from playwright.sync_api import expect, sync_playwright
 
 
 def get_phonetic_by_youdao(word):
-    url = "https://www.youdao.com/result?word={word}&lang=en"
-    res = requests.get(url.format(word=word))
-    for i in re.findall("per-phone.*?点击发音", res.text):
-        if "美" in i:
-            for i in re.findall(r"phonetic.*?span", i):
-                for i in re.findall(r"/(.*?)/", i):
-                    return i.strip()
+    try:
+        url = "https://www.youdao.com/result?word={word}&lang=en"
+        res = requests.get(url.format(word=word), timeout=10)
+        for i in re.findall("per-phone.*?点击发音", res.text):
+            if "美" in i:
+                for i in re.findall(r"phonetic.*?span", i):
+                    for i in re.findall(r"/(.*?)/", i):
+                        return i.strip()
+    except Exception as e:
+        print(f"通过有道词典获取音标失败: {e}")
     return None
 
 
 def get_phonetic_by_bing(word):
-    url = "https://cn.bing.com/dict/search?q={word}"
-    res = requests.get(url.format(word=word))
-    for i in re.findall(r"美.*?\[(.*?)\]", res.text):
-        return i.strip()
+    try:
+        url = "https://cn.bing.com/dict/search?q={word}"
+        res = requests.get(url.format(word=word), timeout=10)
+        for i in re.findall(r"美.*?\[(.*?)\]", res.text):
+            return i.strip()
+    except Exception as e:
+        print(f"通过必应词典获取音标失败: {e}")
     return None
 
 
 def get_phonetic_by_baidu(word):
     url = f"https://fanyi.baidu.com/mtpe-individual/transText?lang=en2zh&query={word}"
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        try:
-            page.goto(url, wait_until="load", timeout=120000)
-            phonetic_locator = page.get_by_text("美/")
-            expect(phonetic_locator).to_be_visible(timeout=5000)
-            phonetic_content = phonetic_locator.text_content()
-            if phonetic_content is None:
-                return None
-            else:
-                phonetic_match = re.findall(r"美/(.*?)/", phonetic_content)
-                if phonetic_match:
-                    phonetic = phonetic_match[0]
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                page = browser.new_page()
+                page.goto(url, wait_until="load", timeout=120000)
+                phonetic_locator = page.get_by_text("美/")
+                expect(phonetic_locator).to_be_visible(timeout=5000)
+                phonetic_content = phonetic_locator.text_content()
+                if phonetic_content is None:
+                    return None
                 else:
-                    phonetic = None
-        except Exception as e:
-            print(f"使用playwright进行百度音标获取失败:\n {e}")
-            return None
-        finally:
-            browser.close()
+                    phonetic_match = re.findall(r"美/(.*?)/", phonetic_content)
+                    if phonetic_match:
+                        phonetic = phonetic_match[0]
+                    else:
+                        phonetic = None
+            finally:
+                browser.close()
+    except Exception as e:
+        print(f"使用playwright进行百度音标获取失败:\n {e}")
+        return None
     return phonetic
 
 
 def get_phonetic_by_ciba(word):
-    url = "https://dict-co.iciba.com/api/dictionary.php?key=AA6C7429C3884C9E766C51187BD1D86F&type=json&w={word}"
-    res = requests.get(url.format(word=word))
-    data = res.json()
     try:
+        url = "https://dict-co.iciba.com/api/dictionary.php?key=AA6C7429C3884C9E766C51187BD1D86F&type=json&w={word}"
+        res = requests.get(url.format(word=word), timeout=10)
+        data = res.json()
         p = data["symbols"][0]["ph_am"]
         if p.strip():
             return p.strip()
     except Exception as e:
         print(f"通过金山词霸获取音标失败: {e}")
-        return None
+    return None
 
 
 def get_phonetic(word):
