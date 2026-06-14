@@ -1,6 +1,7 @@
-import requests
 import io
 from enum import Enum, unique
+
+import requests
 
 
 @unique
@@ -21,5 +22,6 @@ def get_dictvoice_bytes(word):
     for type_name, type_value in VoiceType.__members__.items():
         type_value = type_value.value
         r_content = request_dictvoice(type_value, word)
-        result.append((type_name, io.BytesIO(r_content)))
+        # 添加.mp3扩展名
+        result.append((type_name.lower() + ".mp3", io.BytesIO(r_content)))
     return result
