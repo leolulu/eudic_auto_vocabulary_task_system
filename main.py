@@ -1,3 +1,4 @@
+import argparse
 import re
 import time
 import traceback
@@ -32,6 +33,31 @@ class Bearer:
         self.agent.doubao.add_system_message(SYSTEM_WORD_TEACHER)
         answer = self.agent.doubao.chat(USER_ASK_WORD.format(word=word))
         return answer
+
+    def add_single_word(self, word: str):
+        """手动定向添加单个单词：只处理这一个词，不取云端列表、不进自动循环。"""
+        word = word.strip().lower()
+        if not word:
+            print("未提供有效单词，已退出。")
+            return
+        # 查重：仅查滴答“背单词”项目下的活跃任务（滴答是唯一事实源），命中即跳过，避免后续无用功
+        self.agent.dida.dida.get_latest_data()
+        existing = [
+            t
+            for t in self.agent.dida.dida.active_tasks
+            if t.project_id == dida365_constants.VOCAB_BOOK_PROJECT_ID
+            and t.status == Task.STATUS_ACTIVE
+            and (t.title or "").strip().lower() == word
+        ]
+        if existing:
+            print(f'单词 [{word}] 在滴答“背单词”中已存在活跃任务，跳过添加。')
+            return
+        print(f"正在添加单词 [{word}] ……")
+        content = self.get_doubao_explanation_by_doubao(word)
+        content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word)}" + ")"
+        content = get_all_phonetic(word) + "\n\n" + content
+        self.agent.dida.add_task(word, content)
+        print(f'单词 [{word}] 已添加到滴答“背单词”。')
 
     def bear_eudic_to_dida365(self):
         """deprecated"""
@@ -126,12 +152,23 @@ class Bearer:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="背单词单词任务系统")
+    parser.add_argument(
+        "--add-word",
+        metavar="WORD",
+        help='手动添加单个单词（词组用英文双引号括起来，如 --add-word "be in a fix"）；只运行一次，不进入自动循环',
+    )
+    args = parser.parse_args()
+
     b = Bearer()
 
-    schedule.every(1).minutes.do(b.bear_eudic_to_dida365)
-    schedule.every(10).seconds.do(b.answer_question_from_dida365)
-    schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
+    if args.add_word:
+        b.add_single_word(args.add_word)
+    else:
+        schedule.every(1).minutes.do(b.bear_eudic_to_dida365)
+        schedule.every(10).seconds.do(b.answer_question_from_dida365)
+        schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
 
-    for _ in range(3600):  # 只运行1小时
-        schedule.run_pending()
-        time.sleep(1)
+        for _ in range(3600):  # 只运行1小时
+            schedule.run_pending()
+            time.sleep(1)
