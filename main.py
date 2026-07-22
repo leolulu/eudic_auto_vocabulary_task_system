@@ -1,9 +1,11 @@
 import argparse
+import getpass
 import re
 import time
 import traceback
 from urllib.parse import quote
 
+import requests
 import schedule
 
 import constants.anki as anki_constants
@@ -11,6 +13,9 @@ import constants.dida365 as dida365_constants
 from agent.agent import Agent
 from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
 from constants.yaml import ANKI_PUSH_ENDPOINT
+from dida365_project.api.dida365 import Dida365 as Dida365Api
+from dida365_project.api.dida365 import DidaLoginCooldownError
+from dida365_project.api.dida365 import DidaSignInError
 from dida365_project.models.task import Task
 from models.anki import UserQuery
 from utils.markdown_to_html_util import markdown_to_html
@@ -158,9 +163,35 @@ if __name__ == "__main__":
         metavar="WORD",
         help='手动添加单个单词（词组用英文双引号括起来，如 --add-word "be in a fix"）；只运行一次，不进入自动循环',
     )
+    parser.add_argument(
+        "--set-dida-t",
+        action="store_true",
+        help="安全导入并验证滴答清单 t 会话凭证；输入不回显，成功后立即退出",
+    )
     args = parser.parse_args()
 
-    b = Bearer()
+    if args.set_dida_t:
+        t_value = getpass.getpass("请输入滴答清单 t 会话凭证：")
+        try:
+            Dida365Api.import_session_cookie(t_value)
+        except ValueError as error:
+            print(f"导入失败：{error}")
+            raise SystemExit(1) from error
+        except requests.RequestException as error:
+            status_code = error.response.status_code if error.response is not None else "网络错误"
+            print(f"暂时无法验证 t，会话文件未修改。状态：{status_code}")
+            raise SystemExit(1) from error
+        except OSError as error:
+            print("无法安全写入滴答清单会话文件，请检查目录权限。")
+            raise SystemExit(1) from error
+        print("滴答清单 t 已验证并安全保存。")
+        raise SystemExit(0)
+
+    try:
+        b = Bearer()
+    except (DidaLoginCooldownError, DidaSignInError) as error:
+        print(error)
+        raise SystemExit(75) from error
 
     if args.add_word:
         b.add_single_word(args.add_word)

@@ -1,5 +1,6 @@
 config.yaml
 /*.session
+/*.auth-state.json
 word_his.db
 
 ttt.py
