@@ -1,4 +1,6 @@
+import hashlib
 import re
+import time
 
 import requests
 from playwright.sync_api import expect, sync_playwright
@@ -62,13 +64,53 @@ def get_phonetic_by_baidu(word):
 
 
 def get_phonetic_by_ciba(word):
+    query = word.strip()
+    if not query:
+        return None
+
+    api_path = "/dictionary/word/query/web"
+    client = "6"
+    web_key = "1000006"
+    web_secret = "7ece94d9f9c202b0d2ec557dg4r9bc"
+    timestamp = str(int(time.time() * 1000))
+    # 词霸网页客户端使用的签名参数，无需个人开发者 Key。
+    signature_source = f"{api_path}{client}{web_key}{timestamp}{query}{web_secret}"
+    signature = hashlib.md5(signature_source.encode("utf-8")).hexdigest()
+
     try:
-        url = "https://dict-co.iciba.com/api/dictionary.php?key=AA6C7429C3884C9E766C51187BD1D86F&type=json&w={word}"
-        res = requests.get(url.format(word=word), timeout=10)
+        res = requests.get(
+            f"https://dict.iciba.com{api_path}",
+            params={
+                "client": client,
+                "key": web_key,
+                "timestamp": timestamp,
+                "word": query,
+                "signature": signature,
+            },
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/json, text/plain, */*",
+            },
+            timeout=15,
+        )
+        res.raise_for_status()
         data = res.json()
-        p = data["symbols"][0]["ph_am"]
-        if p.strip():
-            return p.strip()
+        message = data.get("message")
+        if not isinstance(message, dict):
+            raise ValueError(f"接口返回异常: {message}")
+
+        base_info = message.get("baesInfo")
+        symbols = base_info.get("symbols") if isinstance(base_info, dict) else None
+        if isinstance(symbols, list):
+            symbol = symbols[0] if symbols else None
+        else:
+            symbol = symbols
+        if isinstance(symbol, dict) and (phonetic := str(symbol.get("ph_am") or "").strip()):
+            return phonetic
     except Exception as e:
         print(f"通过金山词霸获取音标失败: {e}")
     return None
