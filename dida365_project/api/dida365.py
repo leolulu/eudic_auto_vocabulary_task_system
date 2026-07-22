@@ -37,6 +37,21 @@ class DidaSignInError(RuntimeError):
         )
 
 
+class DidaSessionValidationError(RuntimeError):
+    def __init__(self, status_code=None, timed_out=False):
+        self.status_code = status_code
+        if status_code is not None:
+            reason = f"HTTP {status_code}"
+        elif timed_out:
+            reason = "网络超时"
+        else:
+            reason = "网络或 DNS 错误"
+        super().__init__(
+            f"滴答清单会话验证失败（{reason}）。已保存的 t 保持不变，程序不会尝试重新登录。"
+            "请检查网络连接、DNS 或代理后重试。"
+        )
+
+
 def _format_local_timestamp(timestamp):
     local_timezone = datetime.now().astimezone().tzinfo
     return (
@@ -119,14 +134,20 @@ class Dida365:
         self.session_file.unlink(missing_ok=True)
 
     def is_session_valid(self):
-        response = self.session.get(
-            self.AUTH_CHECK_URL,
-            headers=self.headers,
-            timeout=self.AUTH_REQUEST_TIMEOUT_SECONDS,
-        )
+        try:
+            response = self.session.get(
+                self.AUTH_CHECK_URL,
+                headers=self.headers,
+                timeout=self.AUTH_REQUEST_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as error:
+            raise DidaSessionValidationError(timed_out=isinstance(error, requests.Timeout)) from error
         if response.status_code == 401:
             return False
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as error:
+            raise DidaSessionValidationError(response.status_code) from error
         return True
 
     def login(self, username, password):

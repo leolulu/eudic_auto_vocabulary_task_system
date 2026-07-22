@@ -353,8 +353,11 @@ data["projectProfiles"]
 | 会话验证 401 | `t` 是否被注销或过期 | 把 401 当成临时网络错误无限重试 |
 | V2 `access_forbidden` | 是否携带完整 `X-Device` | 立即断言 V2 已退役 |
 | V2/V3 502、503、504 | 服务端临时异常和网络状态 | 清除 `t` 或转入 signon |
+| 会话验证出现 `getaddrinfo failed` / `NameResolutionError` | 本机 DNS、网络和代理；恢复后重试 | 删除 `t` 或改用用户名密码登录 |
 | 附件接口 401 | 当前 `t` 是否有效 | 使用官方 API 口令替代私有 Cookie |
 | systemd 快速重启 | Python traceback、登录冷却是否生效 | 让每个新进程再次 signon |
+
+会话验证阶段的 DNS、超时、429 或 5xx 均按临时故障处理：程序保留已经保存的 `t`，不调用 signon，并用中文提示网络、DNS 或代理检查方向。只有验证接口明确返回 401 时，才会清除旧会话并尝试重新登录一次。
 
 ### 14. 真实写入测试边界
 

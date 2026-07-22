@@ -15,6 +15,7 @@ from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
 from constants.yaml import ANKI_PUSH_ENDPOINT
 from dida365_project.api.dida365 import Dida365 as Dida365Api
 from dida365_project.api.dida365 import DidaLoginCooldownError
+from dida365_project.api.dida365 import DidaSessionValidationError
 from dida365_project.api.dida365 import DidaSignInError
 from dida365_project.models.task import Task
 from models.anki import UserQuery
@@ -189,7 +190,7 @@ if __name__ == "__main__":
 
     try:
         b = Bearer()
-    except (DidaLoginCooldownError, DidaSignInError) as error:
+    except (DidaLoginCooldownError, DidaSessionValidationError, DidaSignInError) as error:
         print(error)
         raise SystemExit(75) from error
 

@@ -8,7 +8,12 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from dida365_project.api.dida365 import Dida365, DidaLoginCooldownError, DidaSignInError
+from dida365_project.api.dida365 import (
+    Dida365,
+    DidaLoginCooldownError,
+    DidaSessionValidationError,
+    DidaSignInError,
+)
 
 
 def make_response(status_code, json_data=None, headers=None):
@@ -42,6 +47,10 @@ class Dida365AuthenticationTest(unittest.TestCase):
 
         network_error = DidaSignInError()
         self.assertIn("网络错误", str(network_error))
+
+        validation_error = DidaSessionValidationError()
+        self.assertIn("会话验证失败（网络或 DNS 错误）", str(validation_error))
+        self.assertIn("已保存的 t 保持不变", str(validation_error))
 
     def create_client(self, session, session_file):
         with (
@@ -132,11 +141,28 @@ class Dida365AuthenticationTest(unittest.TestCase):
                 session.get = Mock(return_value=make_response(status_code))
                 session.request = Mock()
 
-                with self.assertRaises(requests.HTTPError):
+                with self.assertRaises(DidaSessionValidationError) as raised:
                     self.create_client(session, session_file)
 
+                self.assertIn(f"HTTP {status_code}", str(raised.exception))
                 session.request.assert_not_called()
                 self.assertTrue(session_file.exists())
+
+    def test_does_not_login_or_delete_session_when_dns_resolution_fails(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_file = Path(temporary_directory) / "dida365.session"
+            save_cookie(session_file)
+            session = requests.Session()
+            session.get = Mock(side_effect=requests.ConnectionError("name resolution failed"))
+            session.request = Mock()
+
+            with self.assertRaises(DidaSessionValidationError) as raised:
+                self.create_client(session, session_file)
+
+            self.assertIn("网络或 DNS 错误", str(raised.exception))
+            session.request.assert_not_called()
+            self.assertTrue(session_file.exists())
+            self.assertFalse((Path(temporary_directory) / "dida365.auth-state.json").exists())
 
     def test_ten_process_starts_reuse_one_session_without_login(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
