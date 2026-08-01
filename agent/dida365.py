@@ -16,6 +16,9 @@ from dida365_project.utils.time_util import get_days_offset, get_today_arrow
 from utils.phonetic_util import query_word_explanation_video
 
 
+MEDIA_DOWNLOAD_TIMEOUT = (5, 60)
+
+
 class Dida365Agent:
     def __init__(self, dida365_api: Dida365) -> None:
         self.dida = dida365_api
@@ -128,7 +131,7 @@ class Dida365Agent:
             for attempt in range(max_retries):
                 try:
                     headers = {"User-Agent": HEADER_CHROME_UA}
-                    response = requests.get(url, headers=headers)
+                    response = requests.get(url, headers=headers, timeout=MEDIA_DOWNLOAD_TIMEOUT)
                     response.raise_for_status()
 
                     # 从URL提取文件名

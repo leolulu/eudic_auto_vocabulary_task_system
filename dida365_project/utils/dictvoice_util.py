@@ -4,6 +4,9 @@ from enum import Enum, unique
 import requests
 
 
+DICTVOICE_REQUEST_TIMEOUT = (5, 30)
+
+
 @unique
 class VoiceType(Enum):
     # UK = 1
@@ -12,7 +15,10 @@ class VoiceType(Enum):
 
 def request_dictvoice(type, word):
     url = "http://dict.youdao.com/dictvoice?type={type}&audio={word}"
-    r = requests.get(url.format(type=type, word=word))
+    r = requests.get(
+        url.format(type=type, word=word),
+        timeout=DICTVOICE_REQUEST_TIMEOUT,
+    )
     r.raise_for_status()
     return r.content
 

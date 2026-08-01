@@ -14,6 +14,7 @@ class EudicNoteFetchError(RuntimeError):
 
 
 EUDIC_NOTE_META_PREFIX = "<!--meta files"
+EUDIC_REQUEST_TIMEOUT = (5, 30)
 
 
 def strip_eudic_note_metadata(note: str) -> str:
@@ -55,7 +56,12 @@ class Eudic:
         params = {
             "language": "en",
         }
-        res = requests.get(url, headers=self.headers, params=params)
+        res = requests.get(
+            url,
+            headers=self.headers,
+            params=params,
+            timeout=EUDIC_REQUEST_TIMEOUT,
+        )
         try:
             res.raise_for_status()
         except:
@@ -76,7 +82,12 @@ class Eudic:
             "word": word,
         }
         try:
-            res = requests.get(GET_NOTE_URL, headers=self.headers, params=params, timeout=15)
+            res = requests.get(
+                GET_NOTE_URL,
+                headers=self.headers,
+                params=params,
+                timeout=EUDIC_REQUEST_TIMEOUT,
+            )
             res.raise_for_status()
             payload = res.json()
         except (requests.RequestException, ValueError) as error:
@@ -115,7 +126,12 @@ class Eudic:
             "page": page,
             "page_size": page_size,
         }
-        res = requests.get(url, headers=self.headers, params=params)
+        res = requests.get(
+            url,
+            headers=self.headers,
+            params=params,
+            timeout=EUDIC_REQUEST_TIMEOUT,
+        )
         try:
             res.raise_for_status()
         except:

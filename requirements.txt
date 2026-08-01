@@ -1,5 +1,4 @@
 requests
-retrying
 Flask
 flask-cors
 PyYAML

@@ -1,16 +1,15 @@
 import copy
 import json
 import os
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.cookiejar import LoadError, MozillaCookieJar
-from io import BufferedReader
 from pathlib import Path
 
 import requests
-from retrying import retry
 
 from ..models.project import Project
 from ..models.task import Task
@@ -69,6 +68,11 @@ class Dida365:
     LOGIN_TRANSIENT_BASE_DELAY_SECONDS = 5 * 60
     LOGIN_TRANSIENT_MAX_DELAY_SECONDS = 60 * 60
     AUTH_REQUEST_TIMEOUT_SECONDS = 30
+    READ_REQUEST_TIMEOUT = (5, 30)
+    WRITE_REQUEST_TIMEOUT = (5, 30)
+    UPLOAD_REQUEST_TIMEOUT = (10, 120)
+    WRITE_CONNECT_RETRY_ATTEMPTS = 3
+    WRITE_CONNECT_RETRY_BASE_DELAY_SECONDS = 1
 
     def __init__(self, username, password, session_file=None, auth_state_file=None) -> None:
         self._initialize_http(session_file=session_file, auth_state_file=auth_state_file)
@@ -308,7 +312,7 @@ class Dida365:
 
     def get_data(self):
         url = self.base_url + "/batch/check/0"
-        r = self.session.get(url, headers=self.headers)
+        r = self.session.get(url, headers=self.headers, timeout=self.READ_REQUEST_TIMEOUT)
         r.raise_for_status()
         self.data = json.loads(r.content)
         self._get_projects()
@@ -317,7 +321,12 @@ class Dida365:
     def search(self, keyword: str):
         url = self.base_url + "/search/all"
         params = {"keywords": keyword}
-        r = self.session.get(url, headers=self.headers, params=params)
+        r = self.session.get(
+            url,
+            headers=self.headers,
+            params=params,
+            timeout=self.READ_REQUEST_TIMEOUT,
+        )
         r.raise_for_status()
         return r.json()
 
@@ -337,40 +346,72 @@ class Dida365:
         projects = self.data["projectProfiles"]
         self.projects = [Project(i) for i in projects]
 
-    @retry(wait_fixed=4000, stop_max_attempt_number=5)
+    def _request_write_with_connect_retry(self, method, url, *, timeout, **kwargs):
+        """只重试尚未建立连接的超时；响应阶段超时可能已经写入成功。"""
+        for attempt in range(1, self.WRITE_CONNECT_RETRY_ATTEMPTS + 1):
+            try:
+                return self.session.request(method, url, timeout=timeout, **kwargs)
+            except requests.ConnectTimeout:
+                if attempt >= self.WRITE_CONNECT_RETRY_ATTEMPTS:
+                    raise
+                delay = self.WRITE_CONNECT_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+                print(
+                    f"滴答写请求连接超时，{delay} 秒后进行第 {attempt + 1} 次尝试。",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                time.sleep(delay)
+
     def post_task(self, payload):
         url = self.base_url + "/batch/task"
         data = json.dumps(payload)
-        r = self.session.request("POST", url, headers=self.headers, data=data)
+        r = self._request_write_with_connect_retry(
+            "POST",
+            url,
+            headers=self.headers,
+            data=data,
+            timeout=self.WRITE_REQUEST_TIMEOUT,
+        )
         r.raise_for_status()
 
-    @retry(wait_fixed=4000, stop_max_attempt_number=5)
     def adjust_task_parent(self, payload):
         url = self.base_url + "/batch/taskParent"
         data = json.dumps(payload)
-        r = self.session.request("POST", url, headers=self.headers, data=data)
+        r = self._request_write_with_connect_retry(
+            "POST",
+            url,
+            headers=self.headers,
+            data=data,
+            timeout=self.WRITE_REQUEST_TIMEOUT,
+        )
         r.raise_for_status()
 
-    @retry(wait_fixed=4000, stop_max_attempt_number=5)
     def upload_attachment(self, *attachments: uploadAttachment):
         for attachment in attachments:
+            # UUID 和文件内容在重试前固定，避免一次逻辑上传产生多个附件或空文件。
             url = "https://api.dida365.com/api/v1/attachment/upload/{project_id}/{task_id}/{uuid}".format(
                 project_id=attachment.project_id, task_id=attachment.task_id, uuid=uuid.uuid1().hex
             )
-            if attachment.file_bytes is not None:
-                f = attachment.file_bytes
-            elif attachment.file_path is not None:
-                f = open(attachment.file_path, "rb")
+            if getattr(attachment, "file_bytes", None) is not None:
+                source = attachment.file_bytes
+                original_position = source.tell()
+                source.seek(0)
+                file_content = source.read()
+                source.seek(original_position)
+            elif getattr(attachment, "file_path", None) is not None:
+                with open(attachment.file_path, "rb") as file:
+                    file_content = file.read()
             else:
                 raise UserWarning(f"Attachment without neither file bytes nor file path!")
-            files = [("file", (attachment.file_name, f, "application/octet-stream"))]
+            files = [("file", (attachment.file_name, file_content, "application/octet-stream"))]
             headers = copy.copy(self.headers)
             headers.pop("content-type")
-            try:
-                r = self.session.request("POST", url, headers=headers, data={}, files=files)
-                r.raise_for_status()
-            except:
-                raise
-            finally:
-                if isinstance(f, BufferedReader):
-                    f.close()
+            r = self._request_write_with_connect_retry(
+                "POST",
+                url,
+                headers=headers,
+                data={},
+                files=files,
+                timeout=self.UPLOAD_REQUEST_TIMEOUT,
+            )
+            r.raise_for_status()

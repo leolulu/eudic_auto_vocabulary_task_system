@@ -3,6 +3,9 @@ import requests
 from constants.doubao import PAYLOAD_SYSTEM_MESSAGE, PAYLOAD_USER_MESSAGE
 
 
+DOUBAO_REQUEST_TIMEOUT = (5, 180)
+
+
 class DoubaoOnline:
     def __init__(self, endpoint, system_message=None):
         self.endpoint = endpoint
@@ -18,6 +21,6 @@ class DoubaoOnline:
             PAYLOAD_SYSTEM_MESSAGE: self.system_message,
             PAYLOAD_USER_MESSAGE: user_message,
         }
-        res = requests.post(self.endpoint, json=Payload)
+        res = requests.post(self.endpoint, json=Payload, timeout=DOUBAO_REQUEST_TIMEOUT)
         res.raise_for_status()
         return res.text

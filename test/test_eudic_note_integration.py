@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from agent.eudic import Eudic, EudicNoteFetchError, strip_eudic_note_metadata
+from agent.eudic import EUDIC_REQUEST_TIMEOUT, Eudic, EudicNoteFetchError, strip_eudic_note_metadata
 from main import Bearer, compose_word_task_content
 
 
@@ -26,6 +26,7 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         self.assertEqual(note, "**来源：**《Demo》\n\n> **hello** world")
         request_get.assert_called_once()
         self.assertEqual(request_get.call_args.kwargs["params"], {"language": "en", "word": "hello"})
+        self.assertEqual(request_get.call_args.kwargs["timeout"], EUDIC_REQUEST_TIMEOUT)
 
     def test_get_note_removes_eudic_meta_files_comment(self):
         note = "**来源：**《Demo》\n> The **hello** world"

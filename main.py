@@ -1,8 +1,10 @@
 import argparse
 import getpass
 import re
+import sys
 import time
 import traceback
+from datetime import datetime
 from urllib.parse import quote
 
 import requests
@@ -24,6 +26,44 @@ from utils.markdown_to_html_util import markdown_to_html
 from utils.phonetic_util import get_all_phonetic
 from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
 from utils.yaml_config_manager import YamlConfigManager
+
+
+SCHEDULED_JOB_LAST_SUCCESS: dict[str, str] = {}
+
+
+def run_scheduled_job(name: str, job, *, log_success: bool = False):
+    """记录任务边界；失败后继续抛出，让 systemd 按既有策略重启。"""
+    started_at = time.monotonic()
+    if log_success:
+        print(f"[调度任务开始] {name}", flush=True)
+    try:
+        result = job()
+    except Exception as error:
+        elapsed = time.monotonic() - started_at
+        print(
+            f"[调度任务失败] {name}，耗时 {elapsed:.1f} 秒：{type(error).__name__}: {error}",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise
+
+    completed_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    SCHEDULED_JOB_LAST_SUCCESS[name] = completed_at
+    if log_success:
+        elapsed = time.monotonic() - started_at
+        print(f"[调度任务完成] {name}，耗时 {elapsed:.1f} 秒", flush=True)
+    return result
+
+
+def log_scheduler_heartbeat():
+    if SCHEDULED_JOB_LAST_SUCCESS:
+        job_status = "；".join(
+            f"{name}={completed_at}"
+            for name, completed_at in sorted(SCHEDULED_JOB_LAST_SUCCESS.items())
+        )
+    else:
+        job_status = "等待首次任务完成"
+    print(f"[服务心跳] {job_status}", flush=True)
 
 
 def compose_word_task_content(phonetic: str, note: str | None, explanation: str) -> str:
@@ -49,7 +89,7 @@ class Bearer:
                     word.note = self.agent.eudic.get_note(word.word)
                     words_with_notes.append(word)
                 except EudicNoteFetchError as error:
-                    print(f"{error}，本轮跳过，下一轮继续重试。")
+                    print(f"{error}，本轮跳过，下一轮继续重试。", flush=True)
             words = words_with_notes
         return list(words)
 
@@ -86,7 +126,8 @@ class Bearer:
     def bear_eudic_to_dida365(self):
         """deprecated"""
         words = self.acquire_words(7, include_notes=True)
-        print(f"添加单词本生词:{words}")
+        if words:
+            print(f"添加单词本生词:{words}", flush=True)
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
@@ -126,7 +167,8 @@ class Bearer:
             ]
             if questions:
                 task_with_question.append((task, questions))
-        print(f"搜索问题结果:{task_with_question}")
+        if task_with_question:
+            print(f"搜索问题结果:{task_with_question}", flush=True)
         return task_with_question
 
     def answer_question_from_dida365(self):
@@ -215,10 +257,27 @@ if __name__ == "__main__":
     if args.add_word:
         b.add_single_word(args.add_word)
     else:
-        schedule.every(1).minutes.do(b.bear_eudic_to_dida365)
-        schedule.every(10).seconds.do(b.answer_question_from_dida365)
-        schedule.every(1).day.at("00:01").do(b.agent.dida.renew_overdue_task)
+        schedule.every(1).minutes.do(
+            run_scheduled_job,
+            "同步欧路生词到滴答",
+            b.bear_eudic_to_dida365,
+            log_success=True,
+        )
+        schedule.every(10).seconds.do(
+            run_scheduled_job,
+            "检查并回答滴答问题",
+            b.answer_question_from_dida365,
+        )
+        schedule.every(1).day.at("00:01").do(
+            run_scheduled_job,
+            "续期逾期单词任务",
+            b.agent.dida.renew_overdue_task,
+            log_success=True,
+        )
+        schedule.every(1).minutes.do(log_scheduler_heartbeat)
+        print("[服务启动] 定时任务调度已开始。", flush=True)
 
         for _ in range(3600):  # 只运行1小时
             schedule.run_pending()
             time.sleep(1)
+        print("[服务退出] 已达到一小时运行周期。", flush=True)
