@@ -1,10 +1,11 @@
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import requests
 
-from agent.eudic import Eudic, EudicNoteFetchError
+from agent.eudic import Eudic, EudicNoteFetchError, strip_eudic_note_metadata
 from main import Bearer, compose_word_task_content
 
 
@@ -25,6 +26,48 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         self.assertEqual(note, "**来源：**《Demo》\n\n> **hello** world")
         request_get.assert_called_once()
         self.assertEqual(request_get.call_args.kwargs["params"], {"language": "en", "word": "hello"})
+
+    def test_get_note_removes_eudic_meta_files_comment(self):
+        note = "**来源：**《Demo》\n> The **hello** world"
+        metadata = {
+            "text": "",
+            "comment": note,
+            "font_style": "normal",
+            "has_comment": False,
+            "public_status": 0,
+        }
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "data": {
+                "word": "hello",
+                "note": f"<!--meta files {json.dumps(metadata, ensure_ascii=False)}-->{note}",
+            }
+        }
+
+        with patch("agent.eudic.requests.get", return_value=response):
+            cleaned_note = Eudic("NIS test").get_note("hello")
+
+        self.assertEqual(cleaned_note, note)
+        task_content = compose_word_task_content("音标", cleaned_note, "释义")
+        self.assertEqual(task_content, f"音标\n\n{note}\n\n释义")
+        self.assertNotIn("<!--meta files", task_content)
+
+    def test_strip_note_metadata_parses_json_before_finding_the_comment_end(self):
+        note = "> A user note"
+        metadata = {"comment": "text containing --> inside JSON"}
+
+        self.assertEqual(
+            strip_eudic_note_metadata(f"<!--meta files {json.dumps(metadata)}-->{note}"),
+            note,
+        )
+
+    def test_strip_note_metadata_preserves_unrelated_or_malformed_comments(self):
+        regular_comment = "<!--user comment-->\n> A user note"
+        malformed_metadata = '<!--meta files {"comment": "broken"}\n> A user note'
+
+        self.assertEqual(strip_eudic_note_metadata(regular_comment), regular_comment)
+        self.assertEqual(strip_eudic_note_metadata(malformed_metadata), malformed_metadata)
 
     def test_get_note_allows_a_valid_null_note(self):
         response = Mock()

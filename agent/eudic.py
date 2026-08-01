@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,35 @@ from models.eudic_word import Word
 
 class EudicNoteFetchError(RuntimeError):
     pass
+
+
+EUDIC_NOTE_META_PREFIX = "<!--meta files"
+
+
+def strip_eudic_note_metadata(note: str) -> str:
+    stripped_note = note.strip()
+    if not stripped_note.startswith(EUDIC_NOTE_META_PREFIX):
+        return stripped_note
+
+    metadata_start = len(EUDIC_NOTE_META_PREFIX)
+    if metadata_start >= len(stripped_note) or not stripped_note[metadata_start].isspace():
+        return stripped_note
+    while metadata_start < len(stripped_note) and stripped_note[metadata_start].isspace():
+        metadata_start += 1
+
+    try:
+        metadata, metadata_end = json.JSONDecoder().raw_decode(stripped_note, metadata_start)
+    except json.JSONDecodeError:
+        return stripped_note
+    if not isinstance(metadata, dict):
+        return stripped_note
+
+    comment_end = metadata_end
+    while comment_end < len(stripped_note) and stripped_note[comment_end].isspace():
+        comment_end += 1
+    if not stripped_note.startswith("-->", comment_end):
+        return stripped_note
+    return stripped_note[comment_end + 3 :].strip()
 
 
 class Eudic:
@@ -65,7 +95,7 @@ class Eudic:
             return None
         if not isinstance(note, str):
             raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记格式异常")
-        return note.strip() or None
+        return strip_eudic_note_metadata(note) or None
 
     def _parse_api_time(self, timestamp_str: str) -> datetime:
         """解析API返回的时间字符串，与Word._fix_timezone保持一致"""
