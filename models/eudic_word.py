@@ -8,6 +8,7 @@ class Word:
     def __init__(self, data_dict: dict) -> None:
         self.word = data_dict["word"]
         self.explanation = data_dict["exp"]
+        self.note: str | None = data_dict.get("note")
         self.add_datetime: datetime = self._fix_timezone(data_dict["add_time"])
 
     def __repr__(self):

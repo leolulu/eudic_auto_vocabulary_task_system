@@ -3,9 +3,13 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from constants.eudic import DEFAULT_VOCAB_BOOK_NAME, GET_WORD_URL, VOCAB_BOOK_BASE_URL, VOCAB_BOOK_ID, VOCAB_BOOK_NAME
+from constants.eudic import DEFAULT_VOCAB_BOOK_NAME, GET_NOTE_URL, GET_WORD_URL, VOCAB_BOOK_BASE_URL, VOCAB_BOOK_ID, VOCAB_BOOK_NAME
 from constants.header import HEADER_AUTHORIZATION, HEADER_USER_AGENT
 from models.eudic_word import Word
+
+
+class EudicNoteFetchError(RuntimeError):
+    pass
 
 
 class Eudic:
@@ -35,6 +39,33 @@ class Eudic:
             if book_info[VOCAB_BOOK_NAME] == DEFAULT_VOCAB_BOOK_NAME:
                 return book_info[VOCAB_BOOK_ID]
         raise UserWarning(f"未找到默认生词本，请检查原始数据：{data}")
+
+    def get_note(self, word: str) -> str | None:
+        params = {
+            "language": "en",
+            "word": word,
+        }
+        try:
+            res = requests.get(GET_NOTE_URL, headers=self.headers, params=params, timeout=15)
+            res.raise_for_status()
+            payload = res.json()
+        except (requests.RequestException, ValueError) as error:
+            raise EudicNoteFetchError(f"读取单词 [{word}] 的欧路笔记失败") from error
+
+        if not isinstance(payload, dict):
+            raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记响应格式异常")
+        data = payload.get("data")
+        if data is None:
+            return None
+        if not isinstance(data, dict):
+            raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记响应格式异常")
+
+        note = data.get("note")
+        if note is None:
+            return None
+        if not isinstance(note, str):
+            raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记格式异常")
+        return note.strip() or None
 
     def _parse_api_time(self, timestamp_str: str) -> datetime:
         """解析API返回的时间字符串，与Word._fix_timezone保持一致"""

@@ -11,6 +11,7 @@ import schedule
 import constants.anki as anki_constants
 import constants.dida365 as dida365_constants
 from agent.agent import Agent
+from agent.eudic import EudicNoteFetchError
 from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
 from constants.yaml import ANKI_PUSH_ENDPOINT
 from dida365_project.api.dida365 import Dida365 as Dida365Api
@@ -25,14 +26,31 @@ from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
 from utils.yaml_config_manager import YamlConfigManager
 
 
+def compose_word_task_content(phonetic: str, note: str | None, explanation: str) -> str:
+    sections = [phonetic]
+    if note and note.strip():
+        sections.append(note.strip())
+    sections.append(explanation)
+    return "\n\n".join(section.strip() for section in sections if section and section.strip())
+
+
 class Bearer:
     def __init__(self) -> None:
         self.agent = Agent()
 
-    def acquire_words(self, days: int):
+    def acquire_words(self, days: int, include_notes: bool = False):
         words = self.agent.eudic.get_words_in_book(days=days)
         words = [w for w in words if w.is_in_last_days_range(days)]
         words = [w for w in words if not if_exists_in_his_set(w.word)]
+        if include_notes:
+            words_with_notes = []
+            for word in words:
+                try:
+                    word.note = self.agent.eudic.get_note(word.word)
+                    words_with_notes.append(word)
+                except EudicNoteFetchError as error:
+                    print(f"{error}，本轮跳过，下一轮继续重试。")
+            words = words_with_notes
         return list(words)
 
     def get_doubao_explanation_by_doubao(self, word: str):
@@ -67,12 +85,12 @@ class Bearer:
 
     def bear_eudic_to_dida365(self):
         """deprecated"""
-        words = self.acquire_words(7)
+        words = self.acquire_words(7, include_notes=True)
         print(f"添加单词本生词:{words}")
         for word in words:
             content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
-            content = get_all_phonetic(word.word) + "\n\n" + content
+            content = compose_word_task_content(get_all_phonetic(word.word), word.note, content)
             try:
                 self.agent.dida.add_task(word.word, content)
             except:  # noqa: E722
