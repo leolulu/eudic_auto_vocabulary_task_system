@@ -1,6 +1,19 @@
 import re
 
 
+MARKDOWN_ESCAPED_PUNCTUATION_PATTERN = re.compile(
+    r'''\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])'''
+)
+
+
+def _protect_markdown_escapes(text: str) -> str:
+    """保护反斜杠转义的标点，防止后续行内规则再次解析它们。"""
+    return MARKDOWN_ESCAPED_PUNCTUATION_PATTERN.sub(
+        lambda match: f"&#{ord(match.group(1))};",
+        text,
+    )
+
+
 def markdown_to_html(markdown_text: str) -> str:
     """
     一个经过彻底重构和优化的 Python 函数，用于将 Markdown 文本转换为 HTML。
@@ -124,6 +137,10 @@ def markdown_to_html(markdown_text: str) -> str:
 
 
 def _parse_inline(text: str) -> str:
+    # Markdown 允许用反斜杠把标点标记为普通文本。先将这些字符替换为
+    # HTML 数字实体，既能阻止下方正则把它们识别成格式，浏览器显示时
+    # 又会还原为原字符，不会把反斜杠带进最终的滴答任务内容。
+    text = _protect_markdown_escapes(text)
     # 行内代码: `code` (需要先处理，避免其内容被其他规则匹配)
     text = re.sub(r"`(.*?)`", lambda m: f"<code>{m.group(1).replace('&', '&').replace('<', '<').replace('>', '>')}</code>", text)
     # 图片: ![alt](src)
