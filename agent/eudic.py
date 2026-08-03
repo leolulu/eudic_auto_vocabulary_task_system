@@ -4,12 +4,28 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from constants.eudic import DEFAULT_VOCAB_BOOK_NAME, GET_NOTE_URL, GET_WORD_URL, VOCAB_BOOK_BASE_URL, VOCAB_BOOK_ID, VOCAB_BOOK_NAME
+from constants.eudic import (
+    DEFAULT_VOCAB_BOOK_NAME,
+    GET_NOTE_URL,
+    GET_WORD_URL,
+    VOCAB_BOOK_BASE_URL,
+    VOCAB_BOOK_ID,
+    VOCAB_BOOK_NAME,
+    WORD_URL,
+)
 from constants.header import HEADER_AUTHORIZATION, HEADER_USER_AGENT
 from models.eudic_word import Word
 
 
 class EudicNoteFetchError(RuntimeError):
+    pass
+
+
+class EudicWordFetchError(RuntimeError):
+    pass
+
+
+class EudicWriteError(RuntimeError):
     pass
 
 
@@ -107,6 +123,72 @@ class Eudic:
         if not isinstance(note, str):
             raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记格式异常")
         return strip_eudic_note_metadata(note) or None
+
+    def get_word(self, word: str) -> dict | None:
+        params = {
+            "language": "en",
+            "word": word,
+        }
+        try:
+            res = requests.get(
+                WORD_URL,
+                headers=self.headers,
+                params=params,
+                timeout=EUDIC_REQUEST_TIMEOUT,
+            )
+            if res.status_code == 404:
+                return None
+            res.raise_for_status()
+            payload = res.json()
+        except (requests.RequestException, ValueError) as error:
+            raise EudicWordFetchError(f"查询单词 [{word}] 的欧路生词记录失败") from error
+
+        candidates = payload.get("data", payload) if isinstance(payload, dict) else payload
+        if candidates is None:
+            return None
+        if isinstance(candidates, dict):
+            candidates = [candidates]
+        if not isinstance(candidates, list):
+            raise EudicWordFetchError(f"单词 [{word}] 的欧路生词响应格式异常")
+
+        normalized_word = word.strip().lower()
+        for candidate in candidates:
+            if isinstance(candidate, dict) and str(candidate.get("word") or "").strip().lower() == normalized_word:
+                return candidate
+        return None
+
+    def save_note(self, word: str, note: str) -> None:
+        try:
+            res = requests.post(
+                GET_NOTE_URL,
+                headers=self.headers,
+                json={
+                    "language": "en",
+                    "word": word,
+                    "note": note,
+                },
+                timeout=EUDIC_REQUEST_TIMEOUT,
+            )
+            res.raise_for_status()
+        except requests.RequestException as error:
+            # 写请求的响应超时可能发生在服务端已经保存之后，由调用方通过 GET 对账。
+            raise EudicWriteError(f"保存单词 [{word}] 的欧路笔记失败") from error
+
+    def add_word(self, word: str) -> None:
+        try:
+            res = requests.post(
+                WORD_URL,
+                headers=self.headers,
+                json={
+                    "language": "en",
+                    "word": word,
+                },
+                timeout=EUDIC_REQUEST_TIMEOUT,
+            )
+            res.raise_for_status()
+        except requests.RequestException as error:
+            # 不直接重试不确定的写请求，交给调用方先查询最终状态。
+            raise EudicWriteError(f"添加单词 [{word}] 到欧路生词本失败") from error
 
     def _parse_api_time(self, timestamp_str: str) -> datetime:
         """解析API返回的时间字符串，与Word._fix_timezone保持一致"""

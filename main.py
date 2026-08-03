@@ -5,6 +5,7 @@ import sys
 import time
 import traceback
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote
 
 import requests
@@ -13,9 +14,9 @@ import schedule
 import constants.anki as anki_constants
 import constants.dida365 as dida365_constants
 from agent.agent import Agent
-from agent.eudic import EudicNoteFetchError
+from agent.eudic import Eudic, EudicNoteFetchError, EudicWordFetchError, EudicWriteError
 from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
-from constants.yaml import ANKI_PUSH_ENDPOINT
+from constants.yaml import ANKI_PUSH_ENDPOINT, EUDIC_API_KEY
 from dida365_project.api.dida365 import Dida365 as Dida365Api
 from dida365_project.api.dida365 import DidaLoginCooldownError
 from dida365_project.api.dida365 import DidaSessionValidationError
@@ -74,6 +75,143 @@ def compose_word_task_content(phonetic: str, note: str | None, explanation: str)
     return "\n\n".join(section.strip() for section in sections if section and section.strip())
 
 
+class EudicPublishError(RuntimeError):
+    pass
+
+
+class EudicNoteConflictError(EudicPublishError):
+    pass
+
+
+def normalize_note_text(note: str) -> str:
+    return note.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _read_note_for_publish(eudic: Eudic, word: str) -> str | None:
+    try:
+        note = eudic.get_note(word)
+    except EudicNoteFetchError as error:
+        raise EudicPublishError(f"无法确认单词 [{word}] 的欧路笔记状态，未添加生词记录。") from error
+    return normalize_note_text(note) if note is not None else None
+
+
+def _read_word_for_publish(eudic: Eudic, word: str) -> dict | None:
+    try:
+        return eudic.get_word(word)
+    except EudicWordFetchError as error:
+        raise EudicPublishError(f"无法确认单词 [{word}] 的欧路生词状态，已停止操作。") from error
+
+
+def publish_single_word(eudic: Eudic, word: str, note: str | None = None) -> str:
+    """将完整生词记录发布到欧路，滴答任务由常驻同步流程统一创建。"""
+    word = word.strip().lower()
+    if not word:
+        raise ValueError("未提供有效单词。")
+    if note is not None:
+        note = normalize_note_text(note)
+        if not note:
+            raise ValueError("笔记内容不能为空。")
+
+    existing_word = _read_word_for_publish(eudic, word)
+    if existing_word is not None:
+        if note is not None:
+            existing_note = _read_note_for_publish(eudic, word)
+            if existing_note != note:
+                raise EudicNoteConflictError(
+                    f"单词 [{word}] 已存在，但欧路笔记与本次输入不同；未覆盖现有笔记。",
+                )
+        print(f"单词 [{word}] 已完整存在于欧路词典，无需重复添加。")
+        return "existing"
+
+    if note is not None:
+        existing_note = _read_note_for_publish(eudic, word)
+        if existing_note is None:
+            try:
+                eudic.save_note(word, note)
+            except EudicWriteError as write_error:
+                # 响应异常时先读回对账；服务端可能已经成功保存。
+                if _read_note_for_publish(eudic, word) != note:
+                    raise EudicPublishError(
+                        f"单词 [{word}] 的欧路笔记未能确认保存成功，未添加生词记录。",
+                    ) from write_error
+            verified_note = _read_note_for_publish(eudic, word)
+            if verified_note != note:
+                raise EudicPublishError(
+                    f"单词 [{word}] 的欧路笔记校验不一致，未添加生词记录。",
+                )
+        elif existing_note != note:
+            raise EudicNoteConflictError(
+                f"单词 [{word}] 尚未加入生词本，但已经存在不同的欧路笔记；未覆盖现有笔记。",
+            )
+        else:
+            print(f"单词 [{word}] 的欧路笔记已经保存，将继续添加生词记录。")
+
+    try:
+        eudic.add_word(word)
+    except EudicWriteError as write_error:
+        # 写响应不确定时通过查询最终状态判断，避免盲目重试。
+        if _read_word_for_publish(eudic, word) is None:
+            raise EudicPublishError(
+                f"单词 [{word}] 未能确认添加到欧路生词本，请稍后用相同命令重试。",
+            ) from write_error
+
+    if _read_word_for_publish(eudic, word) is None:
+        raise EudicPublishError(
+            f"单词 [{word}] 写入后未通过欧路查询校验，请稍后用相同命令重试。",
+        )
+
+    if note:
+        print(f"单词 [{word}] 及笔记已保存到欧路词典，等待后台同步到滴答清单。")
+    else:
+        print(f"单词 [{word}] 已保存到欧路词典，等待后台同步到滴答清单。")
+    return "created"
+
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="背单词单词任务系统")
+    parser.add_argument(
+        "--add-word",
+        metavar="WORD",
+        help='向欧路生词本添加单个单词（词组用英文双引号括起来，如 --add-word "be in a fix"）；由后台同步到滴答清单',
+    )
+    note_group = parser.add_mutually_exclusive_group()
+    note_group.add_argument(
+        "--note",
+        metavar="TEXT",
+        help="随 --add-word 保存的单行或较短笔记",
+    )
+    note_group.add_argument(
+        "--note-file",
+        metavar="PATH",
+        help="从 UTF-8 文本文件读取随 --add-word 保存的多行笔记",
+    )
+    parser.add_argument(
+        "--set-dida-t",
+        action="store_true",
+        help="安全导入并验证滴答清单 t 会话凭证；输入不回显，成功后立即退出",
+    )
+    return parser
+
+
+def resolve_note_argument(parser: argparse.ArgumentParser, args: argparse.Namespace) -> str | None:
+    if (args.note is not None or args.note_file is not None) and not args.add_word:
+        parser.error("--note 和 --note-file 只能与 --add-word 一起使用")
+
+    note = args.note
+    if args.note_file is not None:
+        try:
+            note = Path(args.note_file).read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as error:
+            parser.error(f"无法读取笔记文件 [{args.note_file}]：{error}")
+
+    if note is None:
+        return None
+    note = normalize_note_text(note)
+    if not note:
+        parser.error("笔记内容不能为空")
+    return note
+
+
 class Bearer:
     def __init__(self) -> None:
         self.agent = Agent()
@@ -98,30 +236,8 @@ class Bearer:
         answer = self.agent.doubao.chat(USER_ASK_WORD.format(word=word))
         return answer
 
-    def add_single_word(self, word: str):
-        """手动定向添加单个单词：只处理这一个词，不取云端列表、不进自动循环。"""
-        word = word.strip().lower()
-        if not word:
-            print("未提供有效单词，已退出。")
-            return
-        # 查重：仅查滴答“背单词”项目下的活跃任务（滴答是唯一事实源），命中即跳过，避免后续无用功
-        self.agent.dida.dida.get_latest_data()
-        existing = [
-            t
-            for t in self.agent.dida.dida.active_tasks
-            if t.project_id == dida365_constants.VOCAB_BOOK_PROJECT_ID
-            and t.status == Task.STATUS_ACTIVE
-            and (t.title or "").strip().lower() == word
-        ]
-        if existing:
-            print(f'单词 [{word}] 在滴答“背单词”中已存在活跃任务，跳过添加。')
-            return
-        print(f"正在添加单词 [{word}] ……")
-        content = self.get_doubao_explanation_by_doubao(word)
-        content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word)}" + ")"
-        content = get_all_phonetic(word) + "\n\n" + content
-        self.agent.dida.add_task(word, content)
-        print(f'单词 [{word}] 已添加到滴答“背单词”。')
+    def add_single_word(self, word: str, note: str | None = None):
+        return publish_single_word(self.agent.eudic, word, note)
 
     def bear_eudic_to_dida365(self):
         """deprecated"""
@@ -218,18 +334,9 @@ class Bearer:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="背单词单词任务系统")
-    parser.add_argument(
-        "--add-word",
-        metavar="WORD",
-        help='手动添加单个单词（词组用英文双引号括起来，如 --add-word "be in a fix"）；只运行一次，不进入自动循环',
-    )
-    parser.add_argument(
-        "--set-dida-t",
-        action="store_true",
-        help="安全导入并验证滴答清单 t 会话凭证；输入不回显，成功后立即退出",
-    )
+    parser = build_argument_parser()
     args = parser.parse_args()
+    note = resolve_note_argument(parser, args)
 
     if args.set_dida_t:
         t_value = getpass.getpass("请输入滴答清单 t 会话凭证：")
@@ -248,36 +355,42 @@ if __name__ == "__main__":
         print("滴答清单 t 已验证并安全保存。")
         raise SystemExit(0)
 
+    if args.add_word:
+        eudic = Eudic(api_key=YamlConfigManager().get_config(EUDIC_API_KEY))
+        try:
+            publish_single_word(eudic, args.add_word, note)
+        except (EudicPublishError, ValueError) as error:
+            print(f"添加失败：{error}", file=sys.stderr)
+            raise SystemExit(1) from error
+        raise SystemExit(0)
+
     try:
         b = Bearer()
     except (DidaLoginCooldownError, DidaSessionValidationError, DidaSignInError) as error:
         print(error)
         raise SystemExit(75) from error
 
-    if args.add_word:
-        b.add_single_word(args.add_word)
-    else:
-        schedule.every(1).minutes.do(
-            run_scheduled_job,
-            "同步欧路生词到滴答",
-            b.bear_eudic_to_dida365,
-            log_success=True,
-        )
-        schedule.every(10).seconds.do(
-            run_scheduled_job,
-            "检查并回答滴答问题",
-            b.answer_question_from_dida365,
-        )
-        schedule.every(1).day.at("00:01").do(
-            run_scheduled_job,
-            "续期逾期单词任务",
-            b.agent.dida.renew_overdue_task,
-            log_success=True,
-        )
-        schedule.every(1).minutes.do(log_scheduler_heartbeat)
-        print("[服务启动] 定时任务调度已开始。", flush=True)
+    schedule.every(1).minutes.do(
+        run_scheduled_job,
+        "同步欧路生词到滴答",
+        b.bear_eudic_to_dida365,
+        log_success=True,
+    )
+    schedule.every(10).seconds.do(
+        run_scheduled_job,
+        "检查并回答滴答问题",
+        b.answer_question_from_dida365,
+    )
+    schedule.every(1).day.at("00:01").do(
+        run_scheduled_job,
+        "续期逾期单词任务",
+        b.agent.dida.renew_overdue_task,
+        log_success=True,
+    )
+    schedule.every(1).minutes.do(log_scheduler_heartbeat)
+    print("[服务启动] 定时任务调度已开始。", flush=True)
 
-        for _ in range(3600):  # 只运行1小时
-            schedule.run_pending()
-            time.sleep(1)
-        print("[服务退出] 已达到一小时运行周期。", flush=True)
+    for _ in range(3600):  # 只运行1小时
+        schedule.run_pending()
+        time.sleep(1)
+    print("[服务退出] 已达到一小时运行周期。", flush=True)
