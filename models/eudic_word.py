@@ -1,7 +1,6 @@
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
-from utils.datetime_util import is_last_x_days_range
+from utils.datetime_util import is_last_x_days_range, parse_eudic_api_time
 
 
 class Word:
@@ -24,13 +23,7 @@ class Word:
         """
         因为欧陆词典返回的不是UTC时间，而是美区时间（UTC-8），所以这里需要修正一下
         """
-        naive_time_str = misleading_timestamp_str.rstrip("Z")
-        naive_dt = datetime.fromisoformat(naive_time_str)
-        source_tz = ZoneInfo("Etc/GMT+8")
-        correct_source_dt = naive_dt.replace(tzinfo=source_tz)
-        beijing_tz = ZoneInfo("Asia/Shanghai")
-        beijing_dt = correct_source_dt.astimezone(beijing_tz)
-        return beijing_dt
+        return parse_eudic_api_time(misleading_timestamp_str)
 
     @property
     def is_last_24h_range(self):

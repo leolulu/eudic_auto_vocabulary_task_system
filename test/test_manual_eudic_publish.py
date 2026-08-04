@@ -11,6 +11,7 @@ from main import (
     EudicNoteConflictError,
     EudicPublishError,
     build_argument_parser,
+    format_eudic_add_time,
     publish_single_word,
     resolve_note_argument,
 )
@@ -167,25 +168,79 @@ class ManualEudicPublishTest(unittest.TestCase):
 
     def test_existing_complete_record_is_an_idempotent_success(self):
         eudic = Mock()
-        eudic.get_word.return_value = {"word": "hello"}
+        eudic.get_word.return_value = {
+            "word": "hello",
+            "add_time": "2023-10-31T19:33:49Z",
+        }
         eudic.get_note.return_value = "context"
 
-        result = publish_single_word(eudic, "hello", "context")
+        with patch("builtins.print") as print_mock:
+            result = publish_single_word(eudic, "hello", "context")
 
         self.assertEqual(result, "existing")
+        print_mock.assert_called_once_with(
+            "单词 [hello] 及笔记已完整存在于欧路词典"
+            "（单词添加于：2023-11-01 11:33:49 北京时间），无需重复添加。",
+        )
         eudic.save_note.assert_not_called()
         eudic.add_word.assert_not_called()
 
     def test_existing_word_with_a_different_note_is_a_conflict(self):
         eudic = Mock()
-        eudic.get_word.return_value = {"word": "hello"}
+        eudic.get_word.return_value = {
+            "word": "hello",
+            "add_time": "2023-10-31T19:33:49Z",
+        }
         eudic.get_note.return_value = "old context"
 
-        with self.assertRaises(EudicNoteConflictError):
+        with self.assertRaisesRegex(
+            EudicNoteConflictError,
+            "添加于：2023-11-01 11:33:49 北京时间.*笔记与本次输入不同",
+        ):
             publish_single_word(eudic, "hello", "new context")
 
         eudic.save_note.assert_not_called()
         eudic.add_word.assert_not_called()
+
+    def test_existing_historical_word_without_note_is_not_backfilled(self):
+        eudic = Mock()
+        eudic.get_word.return_value = {
+            "word": "hello",
+            "add_time": "2023-10-31T19:33:49Z",
+        }
+        eudic.get_note.return_value = None
+
+        with self.assertRaisesRegex(
+            EudicNoteConflictError,
+            "添加于：2023-11-01 11:33:49 北京时间.*不会给历史生词补写笔记",
+        ):
+            publish_single_word(eudic, "hello", "new context")
+
+        eudic.save_note.assert_not_called()
+        eudic.add_word.assert_not_called()
+
+    def test_existing_word_without_a_note_argument_reports_add_time_without_claiming_completeness(self):
+        eudic = Mock()
+        eudic.get_word.return_value = {
+            "word": "hello",
+            "add_time": "2023-10-31T19:33:49Z",
+        }
+
+        with patch("builtins.print") as print_mock:
+            result = publish_single_word(eudic, "hello")
+
+        self.assertEqual(result, "existing")
+        print_mock.assert_called_once_with(
+            "单词 [hello] 已存在于欧路生词本"
+            "（添加于：2023-11-01 11:33:49 北京时间），无需重复添加。",
+        )
+        eudic.get_note.assert_not_called()
+        eudic.save_note.assert_not_called()
+        eudic.add_word.assert_not_called()
+
+    def test_existing_word_with_missing_or_invalid_add_time_uses_a_clear_fallback(self):
+        self.assertEqual(format_eudic_add_time({}), "添加时间未知")
+        self.assertEqual(format_eudic_add_time({"add_time": "invalid"}, subject="单词"), "单词添加时间未知")
 
 
 class ManualNoteArgumentTest(unittest.TestCase):

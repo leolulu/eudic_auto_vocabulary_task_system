@@ -1,6 +1,5 @@
 import json
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 import requests
 
@@ -15,6 +14,7 @@ from constants.eudic import (
 )
 from constants.header import HEADER_AUTHORIZATION, HEADER_USER_AGENT
 from models.eudic_word import Word
+from utils.datetime_util import parse_eudic_api_time
 
 
 class EudicNoteFetchError(RuntimeError):
@@ -104,6 +104,8 @@ class Eudic:
                 params=params,
                 timeout=EUDIC_REQUEST_TIMEOUT,
             )
+            if res.status_code == 404:
+                return None
             res.raise_for_status()
             payload = res.json()
         except (requests.RequestException, ValueError) as error:
@@ -192,12 +194,7 @@ class Eudic:
 
     def _parse_api_time(self, timestamp_str: str) -> datetime:
         """解析API返回的时间字符串，与Word._fix_timezone保持一致"""
-        naive_time_str = timestamp_str.rstrip("Z")
-        naive_dt = datetime.fromisoformat(naive_time_str)
-        source_tz = ZoneInfo("Etc/GMT+8")
-        correct_source_dt = naive_dt.replace(tzinfo=source_tz)
-        beijing_tz = ZoneInfo("Asia/Shanghai")
-        return correct_source_dt.astimezone(beijing_tz)
+        return parse_eudic_api_time(timestamp_str)
 
     def _fetch_page(self, vocab_book_id: str, page: int, page_size: int) -> list[dict]:
         """获取单页单词数据"""

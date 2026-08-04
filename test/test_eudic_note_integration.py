@@ -83,6 +83,14 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         with patch("agent.eudic.requests.get", return_value=response):
             self.assertIsNone(Eudic("NIS test").get_note("legacy"))
 
+    def test_get_note_treats_not_found_as_no_note(self):
+        response = Mock(status_code=404)
+
+        with patch("agent.eudic.requests.get", return_value=response):
+            self.assertIsNone(Eudic("NIS test").get_note("missing"))
+
+        response.raise_for_status.assert_not_called()
+
     def test_get_note_wraps_request_failures(self):
         with patch("agent.eudic.requests.get", side_effect=requests.Timeout("timed out")):
             with self.assertRaises(EudicNoteFetchError):

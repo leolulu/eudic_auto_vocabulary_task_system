@@ -25,6 +25,7 @@ from dida365_project.models.task import Task
 from models.anki import UserQuery
 from utils.markdown_to_html_util import markdown_to_html
 from utils.phonetic_util import get_all_phonetic
+from utils.datetime_util import parse_eudic_api_time
 from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
 from utils.yaml_config_manager import YamlConfigManager
 
@@ -87,6 +88,17 @@ def normalize_note_text(note: str) -> str:
     return note.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+def format_eudic_add_time(word_record: dict, subject: str = "") -> str:
+    add_time = word_record.get("add_time")
+    if not isinstance(add_time, str) or not add_time.strip():
+        return f"{subject}添加时间未知"
+    try:
+        formatted_time = parse_eudic_api_time(add_time).strftime("%Y-%m-%d %H:%M:%S 北京时间")
+    except ValueError:
+        return f"{subject}添加时间未知"
+    return f"{subject}添加于：{formatted_time}"
+
+
 def _read_note_for_publish(eudic: Eudic, word: str) -> str | None:
     try:
         note = eudic.get_note(word)
@@ -116,11 +128,25 @@ def publish_single_word(eudic: Eudic, word: str, note: str | None = None) -> str
     if existing_word is not None:
         if note is not None:
             existing_note = _read_note_for_publish(eudic, word)
+            if existing_note is None:
+                raise EudicNoteConflictError(
+                    f"单词 [{word}] 已存在于欧路生词本（{format_eudic_add_time(existing_word)}），"
+                    "但没有笔记；本命令不会给历史生词补写笔记。",
+                )
             if existing_note != note:
                 raise EudicNoteConflictError(
-                    f"单词 [{word}] 已存在，但欧路笔记与本次输入不同；未覆盖现有笔记。",
+                    f"单词 [{word}] 已存在（{format_eudic_add_time(existing_word)}），"
+                    "但欧路笔记与本次输入不同；未覆盖现有笔记。",
                 )
-        print(f"单词 [{word}] 已完整存在于欧路词典，无需重复添加。")
+            print(
+                f"单词 [{word}] 及笔记已完整存在于欧路词典"
+                f"（{format_eudic_add_time(existing_word, subject='单词')}），无需重复添加。",
+            )
+        else:
+            print(
+                f"单词 [{word}] 已存在于欧路生词本"
+                f"（{format_eudic_add_time(existing_word)}），无需重复添加。",
+            )
         return "existing"
 
     if note is not None:
