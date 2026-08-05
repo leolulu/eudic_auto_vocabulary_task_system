@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timedelta
 
 import requests
@@ -30,6 +31,7 @@ class EudicWriteError(RuntimeError):
 
 
 EUDIC_NOTE_META_PREFIX = "<!--meta files"
+EUDIC_NOTE_NBSP_PATTERN = re.compile(r"&(?:nbsp|#0*160|#x0*a0);", re.IGNORECASE)
 EUDIC_REQUEST_TIMEOUT = (5, 30)
 
 
@@ -57,6 +59,14 @@ def strip_eudic_note_metadata(note: str) -> str:
     if not stripped_note.startswith("-->", comment_end):
         return stripped_note
     return stripped_note[comment_end + 3 :].strip()
+
+
+def normalize_eudic_note(note: str) -> str:
+    note = strip_eudic_note_metadata(note)
+    # 欧路 App 编辑器会把普通词间空格序列化成不换行空格实体。
+    # 这里只还原空格，避免通用 HTML 解码把其他实体变成会影响 Markdown 的字符。
+    note = EUDIC_NOTE_NBSP_PATTERN.sub(" ", note).replace("\u00a0", " ")
+    return note.strip()
 
 
 class Eudic:
@@ -124,7 +134,7 @@ class Eudic:
             return None
         if not isinstance(note, str):
             raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记格式异常")
-        return strip_eudic_note_metadata(note) or None
+        return normalize_eudic_note(note) or None
 
     def get_word(self, word: str) -> dict | None:
         params = {

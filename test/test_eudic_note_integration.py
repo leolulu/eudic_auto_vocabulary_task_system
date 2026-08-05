@@ -5,7 +5,13 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from agent.eudic import EUDIC_REQUEST_TIMEOUT, Eudic, EudicNoteFetchError, strip_eudic_note_metadata
+from agent.eudic import (
+    EUDIC_REQUEST_TIMEOUT,
+    Eudic,
+    EudicNoteFetchError,
+    normalize_eudic_note,
+    strip_eudic_note_metadata,
+)
 from main import Bearer, compose_word_task_content
 
 
@@ -53,6 +59,40 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         task_content = compose_word_task_content("音标", cleaned_note, "释义")
         self.assertEqual(task_content, f"音标\n\n{note}\n\n释义")
         self.assertNotIn("<!--meta files", task_content)
+
+    def test_get_note_restores_spaces_serialized_by_eudic_app(self):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "data": {
+                "word": "schizophrenia",
+                "note": (
+                    '<!--meta files {"font_style":"normal","public_status":0} -->'
+                    "The&nbsp;Backrooms&nbsp;but&nbsp;Clark&nbsp;has&nbsp;"
+                    "schizophrenia&nbsp;"
+                ),
+            }
+        }
+
+        with patch("agent.eudic.requests.get", return_value=response):
+            note = Eudic("NIS test").get_note("schizophrenia")
+
+        self.assertEqual(note, "The Backrooms but Clark has schizophrenia")
+        self.assertEqual(
+            compose_word_task_content("音标", note, "释义"),
+            "音标\n\nThe Backrooms but Clark has schizophrenia\n\n释义",
+        )
+
+    def test_normalize_note_handles_numeric_and_unicode_non_breaking_spaces(self):
+        self.assertEqual(
+            normalize_eudic_note(" A&nbsp;B&#160;C&#0160;D&#xA0;E&#x00a0;F\u00a0G "),
+            "A B C D E F G",
+        )
+
+    def test_normalize_note_preserves_markdown_and_other_html_entities(self):
+        note = "**bold** &amp; `&lt;tag&gt;`\n> quote"
+
+        self.assertEqual(normalize_eudic_note(note), note)
 
     def test_strip_note_metadata_parses_json_before_finding_the_comment_end(self):
         note = "> A user note"
