@@ -80,7 +80,8 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         self.assertEqual(note, "The Backrooms but Clark has schizophrenia")
         self.assertEqual(
             compose_word_task_content("音标", note, "释义"),
-            "音标\n\nThe Backrooms but Clark has schizophrenia\n\n释义",
+            "音标\n\n**生词语境：**\n"
+            "> The Backrooms but Clark has schizophrenia\n\n释义",
         )
 
     def test_normalize_note_handles_numeric_and_unicode_non_breaking_spaces(self):
@@ -175,6 +176,39 @@ class EudicNoteIntegrationTest(unittest.TestCase):
             "必应词典: /həˈləʊ/\n\n"
             "**来源：**《Demo》\n\n> **hello** world\n\n"
             "释义\n\n[通过web添加anki生词](http://example.test)",
+        )
+
+    def test_compose_task_content_recognizes_legacy_player_note_prefix(self):
+        content = compose_word_task_content(
+            "音标",
+            "**来源：** 《Demo》\r\n> First line\r\nSecond legacy line",
+            "释义",
+        )
+
+        self.assertEqual(
+            content,
+            "音标\n\n"
+            "**来源：** 《Demo》\n> First line\nSecond legacy line\n\n"
+            "释义",
+        )
+
+    def test_compose_task_content_quotes_multiline_note_and_preserves_markdown(self):
+        content = compose_word_task_content(
+            "音标",
+            "First paragraph\r\n\r\n**important**\r- first item\r`inline code`",
+            "释义",
+        )
+
+        self.assertEqual(
+            content,
+            "音标\n\n"
+            "**生词语境：**\n"
+            "> First paragraph\n"
+            ">\n"
+            "> **important**\n"
+            "> - first item\n"
+            "> `inline code`\n\n"
+            "释义",
         )
 
     def test_compose_task_content_keeps_legacy_words_without_notes(self):

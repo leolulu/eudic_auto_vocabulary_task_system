@@ -31,6 +31,8 @@ from utils.yaml_config_manager import YamlConfigManager
 
 
 SCHEDULED_JOB_LAST_SUCCESS: dict[str, str] = {}
+PLAYER_NOTE_PREFIX_PATTERN = re.compile(r"^\*\*来源：\*\*[ \t]*《")
+GENERIC_NOTE_HEADING = "**生词语境：**"
 
 
 def run_scheduled_job(name: str, job, *, log_success: bool = False):
@@ -68,10 +70,25 @@ def log_scheduler_heartbeat():
     print(f"[服务心跳] {job_status}", flush=True)
 
 
+def format_note_for_task(note: str) -> str:
+    normalized_note = note.replace("\r\n", "\n").replace("\r", "\n").strip()
+    # 跨项目约定：字幕播放器用稳定的“**来源：**《”前缀标记已经排版的 Note。
+    # 修改识别规则时，必须同步 subtitle_video_player/js/eudic_integration.js
+    # 的 buildNoteFromContext() 及两个项目 README 中的说明。
+    if PLAYER_NOTE_PREFIX_PATTERN.match(normalized_note):
+        return normalized_note
+
+    quoted_lines = [
+        ">" if not line.strip() else f"> {line}"
+        for line in normalized_note.split("\n")
+    ]
+    return "\n".join([GENERIC_NOTE_HEADING, *quoted_lines])
+
+
 def compose_word_task_content(phonetic: str, note: str | None, explanation: str) -> str:
     sections = [phonetic]
     if note and note.strip():
-        sections.append(note.strip())
+        sections.append(format_note_for_task(note))
     sections.append(explanation)
     return "\n\n".join(section.strip() for section in sections if section and section.strip())
 
