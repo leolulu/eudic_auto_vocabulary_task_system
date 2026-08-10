@@ -154,7 +154,7 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         )
         eudic = Mock()
         eudic.get_words_in_book.return_value = [word]
-        eudic.get_note.side_effect = EudicNoteFetchError("temporary failure")
+        eudic.get_note_data.side_effect = EudicNoteFetchError("temporary failure")
         bearer = Bearer.__new__(Bearer)
         bearer.agent = SimpleNamespace(eudic=eudic)
 
@@ -162,7 +162,7 @@ class EudicNoteIntegrationTest(unittest.TestCase):
             result = bearer.acquire_words(7, include_notes=True)
 
         self.assertEqual(result, [])
-        eudic.get_note.assert_called_once_with("hello")
+        eudic.get_note_data.assert_called_once_with("hello")
 
     def test_compose_task_content_places_note_between_phonetic_and_explanation(self):
         content = compose_word_task_content(

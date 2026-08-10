@@ -2,7 +2,9 @@ import os
 
 
 class uploadAttachment:
-    FILE_PATTERN = r"(\!\[file\]\(.*?\))"
+    # 滴答使用 ![file] 渲染音频/普通附件，使用 ![image] 内联渲染图片。
+    # 重排正文时必须同时识别两种引用，避免重试后残留或重复附件。
+    FILE_PATTERN = r"(\!\[(?:file|image)\]\(.*?\))"
 
     def __init__(self, task, file_bytes_obj: tuple | None = None, file_path: str | None = None) -> None:
         self.task_id = task.id

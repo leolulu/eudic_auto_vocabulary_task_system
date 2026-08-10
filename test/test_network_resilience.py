@@ -178,6 +178,18 @@ class ExternalRequestTimeoutTest(unittest.TestCase):
         self.assertEqual(files[0][0], "video.mp4")
         self.assertEqual(request_get.call_args.kwargs["timeout"], MEDIA_DOWNLOAD_TIMEOUT)
 
+    def test_voice_failure_does_not_block_other_attachments(self):
+        agent = Dida365Agent(Mock())
+
+        with (
+            patch(
+                "agent.dida365.get_dictvoice_bytes",
+                side_effect=requests.HTTPError("voice unavailable"),
+            ),
+            patch("agent.dida365.query_word_explanation_video", return_value=[]),
+        ):
+            self.assertEqual(agent._get_task_attachments_bytes("rare-word"), [])
+
 
 class ScheduledJobLoggingTest(unittest.TestCase):
     def setUp(self):

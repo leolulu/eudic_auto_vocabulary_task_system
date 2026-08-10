@@ -9,6 +9,8 @@ from constants.yaml import (
     DIDA365_USERNAME,
     DOUBAO_WEBSERVER_ENDPOINT,
     EUDIC_API_KEY,
+    EUDIC_SYNC_TOKEN,
+    EUDIC_SYNC_USER_ID,
 )
 
 
@@ -20,12 +22,17 @@ class YamlConfigManager:
         DIDA365_PASSWORD: "请输入Dida365密码",
         ANKI_PUSH_ENDPOINT: "请输入Anki后端API地址",
     }
+    OPTIONAL_CONFIG = {
+        EUDIC_SYNC_TOKEN: "",
+        EUDIC_SYNC_USER_ID: "",
+    }
+    DEFAULT_CONFIG = {**ESSENTIAL_CONFIG, **OPTIONAL_CONFIG}
 
     def __init__(self, config_file_path=CONFIG_FILE_NAME) -> None:
         self.config_file_path = config_file_path
         self.config = dict()
         if not os.path.exists(self.config_file_path):
-            self.save_config(YamlConfigManager.ESSENTIAL_CONFIG)
+            self.save_config(YamlConfigManager.DEFAULT_CONFIG)
             raise UserWarning(f"配置文件不存在，已生成默认配置文件：{self.config_file_path}")
         else:
             _config = self.load_config()

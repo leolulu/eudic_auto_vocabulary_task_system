@@ -14,7 +14,15 @@ import schedule
 import constants.anki as anki_constants
 import constants.dida365 as dida365_constants
 from agent.agent import Agent
-from agent.eudic import Eudic, EudicNoteFetchError, EudicWordFetchError, EudicWriteError
+from agent.eudic import (
+    Eudic,
+    EudicNoteFetchError,
+    EudicNoteImageDownloadError,
+    EudicWordFetchError,
+    EudicWriteError,
+)
+from agent.eudic_app_sync import EudicAppSyncClient, EudicAppSyncError
+from constants.eudic import EUDIC_NOTE_IMAGES_PLACEHOLDER
 from constants.prompt import SYSTEM_WORD_TEACHER, USER_ASK_EXP, USER_ASK_WORD
 from constants.yaml import ANKI_PUSH_ENDPOINT, EUDIC_API_KEY
 from dida365_project.api.dida365 import Dida365 as Dida365Api
@@ -85,10 +93,20 @@ def format_note_for_task(note: str) -> str:
     return "\n".join([GENERIC_NOTE_HEADING, *quoted_lines])
 
 
-def compose_word_task_content(phonetic: str, note: str | None, explanation: str) -> str:
+def compose_word_task_content(
+    phonetic: str,
+    note: str | None,
+    explanation: str,
+    note_image_count: int = 0,
+) -> str:
     sections = [phonetic]
     if note and note.strip():
-        sections.append(format_note_for_task(note))
+        note_section = format_note_for_task(note)
+        if note_image_count:
+            note_section = "\n".join([note_section, EUDIC_NOTE_IMAGES_PLACEHOLDER])
+        sections.append(note_section)
+    elif note_image_count:
+        sections.append("\n".join([GENERIC_NOTE_HEADING, EUDIC_NOTE_IMAGES_PLACEHOLDER]))
     sections.append(explanation)
     return "\n\n".join(section.strip() for section in sections if section and section.strip())
 
@@ -124,6 +142,23 @@ def _read_note_for_publish(eudic: Eudic, word: str) -> str | None:
     return normalize_note_text(note) if note is not None else None
 
 
+def _read_note_data_for_publish(eudic: Eudic, word: str):
+    try:
+        return eudic.get_note_data(word)
+    except EudicNoteFetchError as error:
+        raise EudicPublishError(f"无法确认单词 [{word}] 的欧路笔记状态，未添加生词记录。") from error
+
+
+def _note_data_matches(note_data, note: str, image_filenames: list[str]) -> bool:
+    if note_data is None or normalize_note_text(note_data.text) != note:
+        return False
+    actual_filenames = [
+        (image.original_filename or "").lower()
+        for image in note_data.images
+    ]
+    return actual_filenames == [filename.lower() for filename in image_filenames]
+
+
 def _read_word_for_publish(eudic: Eudic, word: str) -> dict | None:
     try:
         return eudic.get_word(word)
@@ -131,29 +166,56 @@ def _read_word_for_publish(eudic: Eudic, word: str) -> dict | None:
         raise EudicPublishError(f"无法确认单词 [{word}] 的欧路生词状态，已停止操作。") from error
 
 
-def publish_single_word(eudic: Eudic, word: str, note: str | None = None) -> str:
+def publish_single_word(
+    eudic: Eudic,
+    word: str,
+    note: str | None = None,
+    note_image_paths: list[Path] | None = None,
+) -> str:
     """将完整生词记录发布到欧路，滴答任务由常驻同步流程统一创建。"""
     word = word.strip().lower()
     if not word:
         raise ValueError("未提供有效单词。")
+    note_image_paths = note_image_paths or []
     if note is not None:
         note = normalize_note_text(note)
         if not note:
             raise ValueError("笔记内容不能为空。")
 
+    prepared_images = []
+    if note_image_paths:
+        try:
+            prepared_images = EudicAppSyncClient.prepare_images(note_image_paths)
+        except EudicAppSyncError as error:
+            raise EudicPublishError(str(error)) from error
+    image_filenames = [image.filename for image in prepared_images]
+    has_note_payload = note is not None or bool(prepared_images)
+    target_note = note or ""
+
     existing_word = _read_word_for_publish(eudic, word)
     if existing_word is not None:
-        if note is not None:
-            existing_note = _read_note_for_publish(eudic, word)
-            if existing_note is None:
+        if has_note_payload:
+            if prepared_images:
+                existing_note_data = _read_note_data_for_publish(eudic, word)
+                note_matches = _note_data_matches(
+                    existing_note_data,
+                    target_note,
+                    image_filenames,
+                )
+                existing_note = existing_note_data.text if existing_note_data else None
+            else:
+                existing_note = _read_note_for_publish(eudic, word)
+                note_matches = existing_note == note
+            if existing_note is None and not note_matches:
                 raise EudicNoteConflictError(
                     f"单词 [{word}] 已存在于欧路生词本（{format_eudic_add_time(existing_word)}），"
                     "但没有笔记；本命令不会给历史生词补写笔记。",
                 )
-            if existing_note != note:
+            if not note_matches:
+                conflict_subject = "欧路笔记文字或图片" if prepared_images else "欧路笔记"
                 raise EudicNoteConflictError(
                     f"单词 [{word}] 已存在（{format_eudic_add_time(existing_word)}），"
-                    "但欧路笔记与本次输入不同；未覆盖现有笔记。",
+                    f"但{conflict_subject}与本次输入不同；未覆盖现有笔记。",
                 )
             print(
                 f"单词 [{word}] 及笔记已完整存在于欧路词典"
@@ -166,7 +228,37 @@ def publish_single_word(eudic: Eudic, word: str, note: str | None = None) -> str
             )
         return "existing"
 
-    if note is not None:
+    if prepared_images:
+        existing_note_data = _read_note_data_for_publish(eudic, word)
+        if existing_note_data is None:
+            try:
+                EudicAppSyncClient().save_note_with_images(
+                    word,
+                    target_note,
+                    prepared_images,
+                )
+            except EudicAppSyncError as write_error:
+                # 私有同步响应异常也先走 OpenAPI 回读；服务端可能已经完整保存。
+                if not _note_data_matches(
+                    _read_note_data_for_publish(eudic, word),
+                    target_note,
+                    image_filenames,
+                ):
+                    raise EudicPublishError(
+                        f"单词 [{word}] 的欧路图片笔记未能确认保存成功，未添加生词记录。"
+                    ) from write_error
+            verified_note_data = _read_note_data_for_publish(eudic, word)
+            if not _note_data_matches(verified_note_data, target_note, image_filenames):
+                raise EudicPublishError(
+                    f"单词 [{word}] 的欧路图片笔记校验不一致，未添加生词记录。"
+                )
+        elif not _note_data_matches(existing_note_data, target_note, image_filenames):
+            raise EudicNoteConflictError(
+                f"单词 [{word}] 尚未加入生词本，但已经存在不同的欧路图片笔记；未覆盖现有笔记。"
+            )
+        else:
+            print(f"单词 [{word}] 的欧路图片笔记已经保存，将继续添加生词记录。")
+    elif note is not None:
         existing_note = _read_note_for_publish(eudic, word)
         if existing_note is None:
             try:
@@ -203,7 +295,7 @@ def publish_single_word(eudic: Eudic, word: str, note: str | None = None) -> str
             f"单词 [{word}] 写入后未通过欧路查询校验，请稍后用相同命令重试。",
         )
 
-    if note:
+    if has_note_payload:
         print(f"单词 [{word}] 及笔记已保存到欧路词典，等待后台同步到滴答清单。")
     else:
         print(f"单词 [{word}] 已保存到欧路词典，等待后台同步到滴答清单。")
@@ -229,6 +321,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="从 UTF-8 文本文件读取随 --add-word 保存的多行笔记",
     )
     parser.add_argument(
+        "--note-image",
+        metavar="PATH",
+        action="append",
+        default=[],
+        help="随 --add-word 上传的欧路笔记图片；可重复指定多张，依赖本机已登录的欧路桌面 App",
+    )
+    parser.add_argument(
         "--set-dida-t",
         action="store_true",
         help="安全导入并验证滴答清单 t 会话凭证；输入不回显，成功后立即退出",
@@ -237,8 +336,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def resolve_note_argument(parser: argparse.ArgumentParser, args: argparse.Namespace) -> str | None:
-    if (args.note is not None or args.note_file is not None) and not args.add_word:
-        parser.error("--note 和 --note-file 只能与 --add-word 一起使用")
+    if (args.note is not None or args.note_file is not None or args.note_image) and not args.add_word:
+        parser.error("--note、--note-file 和 --note-image 只能与 --add-word 一起使用")
 
     note = args.note
     if args.note_file is not None:
@@ -255,6 +354,14 @@ def resolve_note_argument(parser: argparse.ArgumentParser, args: argparse.Namesp
     return note
 
 
+def resolve_note_image_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> list[Path]:
+    image_paths = [Path(path) for path in args.note_image]
+    for path in image_paths:
+        if not path.is_file():
+            parser.error(f"无法读取笔记图片 [{path}]")
+    return image_paths
+
+
 class Bearer:
     def __init__(self) -> None:
         self.agent = Agent()
@@ -267,7 +374,9 @@ class Bearer:
             words_with_notes = []
             for word in words:
                 try:
-                    word.note = self.agent.eudic.get_note(word.word)
+                    note_data = self.agent.eudic.get_note_data(word.word)
+                    word.note = note_data.text if note_data is not None else None
+                    word.note_images = note_data.images if note_data is not None else ()
                     words_with_notes.append(word)
                 except EudicNoteFetchError as error:
                     print(f"{error}，本轮跳过，下一轮继续重试。", flush=True)
@@ -288,14 +397,33 @@ class Bearer:
         if words:
             print(f"添加单词本生词:{words}", flush=True)
         for word in words:
+            try:
+                note_image_files = self.agent.eudic.download_note_images(word.note_images)
+            except EudicNoteImageDownloadError as error:
+                print(f"{error}，本轮跳过，下一轮继续重试。", flush=True)
+                continue
             content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
-            content = compose_word_task_content(get_all_phonetic(word.word), word.note, content)
+            content = compose_word_task_content(
+                get_all_phonetic(word.word),
+                word.note,
+                content,
+                note_image_count=len(note_image_files),
+            )
+            sync_succeeded = False
             try:
-                self.agent.dida.add_task(word.word, content)
+                self.agent.dida.add_task(
+                    word.word,
+                    content,
+                    note_image_files=note_image_files,
+                )
             except:  # noqa: E722
                 traceback.print_exc()
-            finally:
+            else:
+                sync_succeeded = True
+            # 图片任务只有在附件和正文引用都校验完成后才能进入历史；无图任务保留
+            # 旧行为，以免发音或视频附件的既有容错语义发生无关变化。
+            if sync_succeeded or not note_image_files:
                 try:
                     self.agent.dida.find_task(word.word, if_reload_data=True)
                     add_word_to_his_set(word.word)
@@ -380,6 +508,7 @@ if __name__ == "__main__":
     parser = build_argument_parser()
     args = parser.parse_args()
     note = resolve_note_argument(parser, args)
+    note_image_paths = resolve_note_image_arguments(parser, args)
 
     if args.set_dida_t:
         t_value = getpass.getpass("请输入滴答清单 t 会话凭证：")
@@ -401,7 +530,12 @@ if __name__ == "__main__":
     if args.add_word:
         eudic = Eudic(api_key=YamlConfigManager().get_config(EUDIC_API_KEY))
         try:
-            publish_single_word(eudic, args.add_word, note)
+            publish_single_word(
+                eudic,
+                args.add_word,
+                note,
+                note_image_paths=note_image_paths,
+            )
         except (EudicPublishError, ValueError) as error:
             print(f"添加失败：{error}", file=sys.stderr)
             raise SystemExit(1) from error

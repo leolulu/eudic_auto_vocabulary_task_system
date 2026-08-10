@@ -1,5 +1,6 @@
 class Attachment:
     FILE_STRING_TEMPLATE = "![file]({})"
+    IMAGE_STRING_TEMPLATE = "![image]({})"
     ID = "id"
     REF_ID = "refId"
     PATH = "path"
@@ -20,7 +21,12 @@ class Attachment:
         else:
             self.is_active = True
         self.content_file_path = "{}/{}".format(self.id, self.file_name)
-        self.content_file_string = Attachment.FILE_STRING_TEMPLATE.format(self.content_file_path)
+        template = (
+            Attachment.IMAGE_STRING_TEMPLATE
+            if (self.file_type or "").upper() == "IMAGE"
+            else Attachment.FILE_STRING_TEMPLATE
+        )
+        self.content_file_string = template.format(self.content_file_path)
 
     def _load_field(self):
         self.id = self.attachment_dict.get(Attachment.ID)

@@ -1,6 +1,7 @@
 VOCAB_BOOK_BASE_URL = "https://api.frdic.com/api/open/v1/studylist/category"
 GET_WORD_URL = "https://api.frdic.com/api/open/v1/studylist/words"
 GET_NOTE_URL = "https://api.frdic.com/api/open/v1/studylist/note"
+EUDIC_NOTE_IMAGES_PLACEHOLDER = "[欧路笔记图片同步中]"
 WORD_URL = "https://api.frdic.com/api/open/v1/studylist/word"
 DEFAULT_VOCAB_BOOK_NAME = "我的生词本"
 VOCAB_BOOK_NAME = "name"

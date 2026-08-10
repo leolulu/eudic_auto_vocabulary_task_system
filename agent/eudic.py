@@ -1,6 +1,11 @@
+import hashlib
+import io
 import json
+import mimetypes
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 import requests
 
@@ -30,43 +35,103 @@ class EudicWriteError(RuntimeError):
     pass
 
 
+class EudicNoteImageDownloadError(RuntimeError):
+    pass
+
+
 EUDIC_NOTE_META_PREFIX = "<!--meta files"
 EUDIC_NOTE_NBSP_PATTERN = re.compile(r"&(?:nbsp|#0*160|#x0*a0);", re.IGNORECASE)
 EUDIC_REQUEST_TIMEOUT = (5, 30)
+EUDIC_IMAGE_DOWNLOAD_TIMEOUT = (5, 60)
+EUDIC_IMAGE_MAX_BYTES = 50 * 1024 * 1024
 
 
-def strip_eudic_note_metadata(note: str) -> str:
+@dataclass(frozen=True)
+class EudicNoteImage:
+    image_id: str
+    url: str
+    original_filename: str | None = None
+
+
+@dataclass(frozen=True)
+class EudicNoteData:
+    text: str
+    images: tuple[EudicNoteImage, ...] = ()
+
+
+def split_eudic_note_metadata(note: str) -> tuple[dict | None, str]:
+    """拆分欧路 App 写入的 meta files 注释和用户正文。
+
+    图片列表位于这个私有元数据中。调用方若调整解析规则，必须同时检查
+    ``Eudic.get_note_data`` 和滴答附件同步链路，避免再次只保留正文而丢图。
+    """
     stripped_note = note.strip()
     if not stripped_note.startswith(EUDIC_NOTE_META_PREFIX):
-        return stripped_note
+        return None, stripped_note
 
     metadata_start = len(EUDIC_NOTE_META_PREFIX)
     if metadata_start >= len(stripped_note) or not stripped_note[metadata_start].isspace():
-        return stripped_note
+        return None, stripped_note
     while metadata_start < len(stripped_note) and stripped_note[metadata_start].isspace():
         metadata_start += 1
 
     try:
         metadata, metadata_end = json.JSONDecoder().raw_decode(stripped_note, metadata_start)
     except json.JSONDecodeError:
-        return stripped_note
+        return None, stripped_note
     if not isinstance(metadata, dict):
-        return stripped_note
+        return None, stripped_note
 
     comment_end = metadata_end
     while comment_end < len(stripped_note) and stripped_note[comment_end].isspace():
         comment_end += 1
     if not stripped_note.startswith("-->", comment_end):
-        return stripped_note
-    return stripped_note[comment_end + 3 :].strip()
+        return None, stripped_note
+    return metadata, stripped_note[comment_end + 3 :].strip()
+
+
+def strip_eudic_note_metadata(note: str) -> str:
+    return split_eudic_note_metadata(note)[1]
+
+
+def parse_eudic_note(note: str) -> EudicNoteData:
+    metadata, text = split_eudic_note_metadata(note)
+    text = EUDIC_NOTE_NBSP_PATTERN.sub(" ", text).replace("\u00a0", " ").strip()
+    if metadata is None:
+        return EudicNoteData(text=text)
+
+    raw_images = metadata.get("image_list") or []
+    if not isinstance(raw_images, list):
+        raise ValueError("image_list 不是列表")
+
+    images = []
+    for index, raw_image in enumerate(raw_images, start=1):
+        if not isinstance(raw_image, dict):
+            raise ValueError(f"第 {index} 个图片元数据不是对象")
+        media_type = raw_image.get("type")
+        if media_type not in (None, "image"):
+            continue
+        url = raw_image.get("url")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError(f"第 {index} 个图片缺少下载地址")
+        image_id = raw_image.get("id")
+        if not isinstance(image_id, str) or not image_id.strip():
+            image_id = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+        original_filename = raw_image.get("orgfilename")
+        if not isinstance(original_filename, str) or not original_filename.strip():
+            original_filename = None
+        images.append(
+            EudicNoteImage(
+                image_id=image_id.strip(),
+                url=url.strip(),
+                original_filename=original_filename,
+            )
+        )
+    return EudicNoteData(text=text, images=tuple(images))
 
 
 def normalize_eudic_note(note: str) -> str:
-    note = strip_eudic_note_metadata(note)
-    # 欧路 App 编辑器会把普通词间空格序列化成不换行空格实体。
-    # 这里只还原空格，避免通用 HTML 解码把其他实体变成会影响 Markdown 的字符。
-    note = EUDIC_NOTE_NBSP_PATTERN.sub(" ", note).replace("\u00a0", " ")
-    return note.strip()
+    return parse_eudic_note(note).text
 
 
 class Eudic:
@@ -102,7 +167,7 @@ class Eudic:
                 return book_info[VOCAB_BOOK_ID]
         raise UserWarning(f"未找到默认生词本，请检查原始数据：{data}")
 
-    def get_note(self, word: str) -> str | None:
+    def get_note_data(self, word: str) -> EudicNoteData | None:
         params = {
             "language": "en",
             "word": word,
@@ -134,7 +199,77 @@ class Eudic:
             return None
         if not isinstance(note, str):
             raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记格式异常")
-        return normalize_eudic_note(note) or None
+        try:
+            note_data = parse_eudic_note(note)
+        except ValueError as error:
+            raise EudicNoteFetchError(f"单词 [{word}] 的欧路笔记图片元数据异常") from error
+        if not note_data.text and not note_data.images:
+            return None
+        return note_data
+
+    def get_note(self, word: str) -> str | None:
+        note_data = self.get_note_data(word)
+        if note_data is None:
+            return None
+        return note_data.text or None
+
+    @staticmethod
+    def _validate_note_image_url(url: str) -> None:
+        parsed_url = urlparse(url)
+        hostname = (parsed_url.hostname or "").lower()
+        if parsed_url.scheme != "https" or not (
+            hostname == "frdic.com" or hostname.endswith(".frdic.com")
+        ):
+            raise EudicNoteImageDownloadError(
+                f"拒绝从非欧路 HTTPS 地址下载笔记图片：{url}"
+            )
+
+    @staticmethod
+    def _note_image_filename(image: EudicNoteImage, content_type: str, index: int) -> str:
+        mime_type = content_type.partition(";")[0].strip().lower()
+        extension = mimetypes.guess_extension(mime_type) or ""
+        if extension == ".jpe":
+            extension = ".jpg"
+        if not extension:
+            extension = ".jpg"
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", image.image_id)[:16] or "unknown"
+        return f"eudic-note-{index:02d}-{safe_id}{extension}".lower()
+
+    def download_note_images(
+        self,
+        images: tuple[EudicNoteImage, ...],
+    ) -> list[tuple[str, io.BytesIO]]:
+        downloaded_images = []
+        for index, image in enumerate(images, start=1):
+            self._validate_note_image_url(image.url)
+            try:
+                response = requests.get(
+                    image.url,
+                    headers=self.headers,
+                    timeout=EUDIC_IMAGE_DOWNLOAD_TIMEOUT,
+                )
+                response.raise_for_status()
+            except requests.RequestException as error:
+                raise EudicNoteImageDownloadError(
+                    f"下载欧路笔记图片 [{image.image_id}] 失败"
+                ) from error
+
+            content_type = response.headers.get("content-type", "")
+            if not content_type.lower().startswith("image/"):
+                raise EudicNoteImageDownloadError(
+                    f"欧路笔记图片 [{image.image_id}] 返回了非图片内容：{content_type or '未知类型'}"
+                )
+            if not response.content:
+                raise EudicNoteImageDownloadError(
+                    f"欧路笔记图片 [{image.image_id}] 内容为空"
+                )
+            if len(response.content) > EUDIC_IMAGE_MAX_BYTES:
+                raise EudicNoteImageDownloadError(
+                    f"欧路笔记图片 [{image.image_id}] 超过 {EUDIC_IMAGE_MAX_BYTES // 1024 // 1024} MB 限制"
+                )
+            filename = self._note_image_filename(image, content_type, index)
+            downloaded_images.append((filename, io.BytesIO(response.content)))
+        return downloaded_images
 
     def get_word(self, word: str) -> dict | None:
         params = {
