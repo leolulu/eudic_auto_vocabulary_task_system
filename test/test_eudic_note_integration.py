@@ -57,8 +57,12 @@ class EudicNoteIntegrationTest(unittest.TestCase):
 
         self.assertEqual(cleaned_note, note)
         task_content = compose_word_task_content("音标", cleaned_note, "释义")
-        self.assertEqual(task_content, f"音标\n\n{note}\n\n释义")
+        self.assertEqual(
+            task_content,
+            "音标\n\n**生词语境：**\n> The **hello** world\n\n释义",
+        )
         self.assertNotIn("<!--meta files", task_content)
+        self.assertNotIn("Demo", task_content)
 
     def test_get_note_restores_spaces_serialized_by_eudic_app(self):
         response = Mock()
@@ -164,7 +168,7 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         self.assertEqual(result, [])
         eudic.get_note_data.assert_called_once_with("hello")
 
-    def test_compose_task_content_places_note_between_phonetic_and_explanation(self):
+    def test_compose_task_content_hides_player_source_filename(self):
         content = compose_word_task_content(
             "必应词典: /həˈləʊ/",
             "**来源：**《Demo》\n\n> **hello** world",
@@ -174,9 +178,10 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         self.assertEqual(
             content,
             "必应词典: /həˈləʊ/\n\n"
-            "**来源：**《Demo》\n\n> **hello** world\n\n"
+            "**生词语境：**\n> **hello** world\n\n"
             "释义\n\n[通过web添加anki生词](http://example.test)",
         )
+        self.assertNotIn("Demo", content)
 
     def test_compose_task_content_recognizes_legacy_player_note_prefix(self):
         content = compose_word_task_content(
@@ -188,7 +193,7 @@ class EudicNoteIntegrationTest(unittest.TestCase):
         self.assertEqual(
             content,
             "音标\n\n"
-            "**来源：** 《Demo》\n> First line\nSecond legacy line\n\n"
+            "**生词语境：**\n> First line\nSecond legacy line\n\n"
             "释义",
         )
 

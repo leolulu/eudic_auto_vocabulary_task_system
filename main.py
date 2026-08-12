@@ -81,10 +81,15 @@ def log_scheduler_heartbeat():
 def format_note_for_task(note: str) -> str:
     normalized_note = note.replace("\r\n", "\n").replace("\r", "\n").strip()
     # 跨项目约定：字幕播放器用稳定的“**来源：**《”前缀标记已经排版的 Note。
+    # 欧路中保留完整来源；生成滴答正文时隐藏首行文件名，只保留下方引用块。
     # 修改识别规则时，必须同步 subtitle_video_player/js/eudic_integration.js
     # 的 buildNoteFromContext() 及两个项目 README 中的说明。
     if PLAYER_NOTE_PREFIX_PATTERN.match(normalized_note):
-        return normalized_note
+        _, _, player_context = normalized_note.partition("\n")
+        player_context = player_context.lstrip("\n")
+        if not player_context:
+            return GENERIC_NOTE_HEADING
+        return "\n".join([GENERIC_NOTE_HEADING, player_context])
 
     quoted_lines = [
         ">" if not line.strip() else f"> {line}"

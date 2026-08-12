@@ -299,6 +299,21 @@ class DidaNoteImagePlacementTest(unittest.TestCase):
 
 
 class NoteImageSyncFlowTest(unittest.TestCase):
+    def test_player_note_image_placeholder_follows_context_without_source_filename(self):
+        content = compose_word_task_content(
+            "phonetic",
+            "**来源：**《A Very Long Filename.mp4》\n> **context** line",
+            "explanation",
+            note_image_count=1,
+        )
+
+        self.assertEqual(
+            content,
+            "phonetic\n\n**生词语境：**\n> **context** line\n"
+            f"{EUDIC_NOTE_IMAGES_PLACEHOLDER}\n\nexplanation",
+        )
+        self.assertNotIn("A Very Long Filename.mp4", content)
+
     def test_compose_content_adds_placeholder_after_note(self):
         content = compose_word_task_content("phonetic", "context", "explanation", note_image_count=2)
 
