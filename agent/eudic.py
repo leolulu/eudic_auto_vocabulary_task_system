@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 
