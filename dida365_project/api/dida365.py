@@ -330,6 +330,83 @@ class Dida365:
         r.raise_for_status()
         return r.json()
 
+    def get_task(self, task_id: str):
+        url = self.base_url + f"/task/{task_id}"
+        response = self.session.get(
+            url,
+            headers=self.headers,
+            timeout=self.READ_REQUEST_TIMEOUT,
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+
+    def get_task_comments(self, project_id: str, task_id: str):
+        # 实测只有带 projectId 的评论列表路径会返回完整数据；
+        # /task/{taskId}/comments 即使存在评论也可能返回空数组。
+        url = self.base_url + f"/project/{project_id}/task/{task_id}/comments"
+        response = self.session.get(
+            url,
+            headers=self.headers,
+            timeout=self.READ_REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        comments = response.json()
+        if not isinstance(comments, list):
+            raise ValueError("滴答评论列表返回了无法识别的数据结构")
+        return comments
+
+    def create_task_comment(
+        self,
+        project_id: str,
+        task_id: str,
+        title: str,
+        *,
+        comment_id: str | None = None,
+        reply_comment_id: str | None = None,
+        created_time: str | None = None,
+    ):
+        comment_id = comment_id or uuid.uuid4().hex[:24]
+        created_time = created_time or datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%S.000+0000"
+        )
+        payload = {
+            "id": comment_id,
+            "createdTime": created_time,
+            "taskId": task_id,
+            "projectId": project_id,
+            "title": title,
+            "userProfile": {"isMyself": True},
+            "mentions": [],
+            "attachments": [],
+            "isNew": True,
+        }
+        if reply_comment_id:
+            payload["replyCommentId"] = reply_comment_id
+        url = self.base_url + f"/project/{project_id}/task/{task_id}/comment"
+        response = self._request_write_with_connect_retry(
+            "POST",
+            url,
+            headers=self.headers,
+            data=json.dumps(payload),
+            timeout=self.WRITE_REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        return comment_id
+
+    def delete_task_comment(self, project_id: str, task_id: str, comment_id: str):
+        # 删除不存在的评论也会返回 200，因此调用方可以安全重试；
+        # 父评论删除不会级联，评论链仍需由叶子向根节点清理。
+        url = self.base_url + f"/project/{project_id}/task/{task_id}/comment/{comment_id}"
+        response = self._request_write_with_connect_retry(
+            "DELETE",
+            url,
+            headers=self.headers,
+            timeout=self.WRITE_REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+
     def enrich_info(self):
         self._enrich_task_info()
 
@@ -373,6 +450,7 @@ class Dida365:
             timeout=self.WRITE_REQUEST_TIMEOUT,
         )
         r.raise_for_status()
+        return r.json() if r.content else None
 
     def adjust_task_parent(self, payload):
         url = self.base_url + "/batch/taskParent"

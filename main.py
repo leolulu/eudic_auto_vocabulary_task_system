@@ -31,6 +31,7 @@ from dida365_project.api.dida365 import DidaSessionValidationError
 from dida365_project.api.dida365 import DidaSignInError
 from dida365_project.models.task import Task
 from models.anki import UserQuery
+from sentence_practice import SentencePracticeService
 from utils.markdown_to_html_util import markdown_to_html
 from utils.phonetic_util import get_all_phonetic
 from utils.datetime_util import parse_eudic_api_time
@@ -370,6 +371,10 @@ def resolve_note_image_arguments(parser: argparse.ArgumentParser, args: argparse
 class Bearer:
     def __init__(self) -> None:
         self.agent = Agent()
+        self.sentence_practice = SentencePracticeService(
+            self.agent.dida,
+            self.agent.doubao,
+        )
 
     def acquire_words(self, days: int, include_notes: bool = False):
         words = self.agent.eudic.get_words_in_book(days=days)
@@ -568,6 +573,17 @@ if __name__ == "__main__":
         "续期逾期单词任务",
         b.agent.dida.renew_overdue_task,
         log_success=True,
+    )
+    schedule.every(1).day.at("00:05").do(
+        run_scheduled_job,
+        "生成每日单词组合造句任务",
+        b.sentence_practice.generate_daily_task,
+        log_success=True,
+    )
+    schedule.every(10).seconds.do(
+        run_scheduled_job,
+        "处理每日造句评论",
+        b.sentence_practice.poll_and_process,
     )
     schedule.every(1).minutes.do(log_scheduler_heartbeat)
     print("[服务启动] 定时任务调度已开始。", flush=True)

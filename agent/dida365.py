@@ -191,6 +191,14 @@ class Dida365Agent:
     def update_task(self, task_dict):
         self.dida.post_task(Task.gen_update_data_payload(task_dict))
 
+    def get_today_vocabulary_tasks(self):
+        self.dida.get_latest_data()
+        return [
+            task
+            for task in self._get_target_words_task(0)
+            if task.status == Task.STATUS_ACTIVE
+        ]
+
     def deactivate_task_attachments(self, task_title: str, attachment_ids: list[str], if_reload_data=True):
         task = self.find_task(task_title, if_reload_data=if_reload_data)
         for attachment_id in attachment_ids:
