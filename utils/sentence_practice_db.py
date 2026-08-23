@@ -7,6 +7,7 @@ from constants.db import RUNTIME_DB_FILE_PATH
 
 
 TASK_STATUS_CREATING = "creating"
+TASK_STATUS_CREATE_FAILED = "create_failed"
 TASK_STATUS_ACTIVE = "active"
 TASK_STATUS_CLOSED = "closed"
 TASK_STATUS_DELETED = "deleted"

@@ -4,7 +4,7 @@ import random
 import re
 import uuid
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from constants.dida365 import VOCAB_BOOK_PROJECT_ID
@@ -26,6 +26,7 @@ from utils.sentence_practice_db import (
     INTERACTION_STATUS_SENDING_CLARIFICATION,
     TASK_STATUS_ACTIVE,
     TASK_STATUS_CLOSED,
+    TASK_STATUS_CREATE_FAILED,
     TASK_STATUS_CREATING,
     TASK_STATUS_DELETED,
     SentencePracticeStateStore,
@@ -34,6 +35,7 @@ from utils.sentence_practice_db import (
 
 PRACTICE_TIMEZONE = ZoneInfo("Asia/Shanghai")
 PRACTICE_TASK_TITLE_PREFIX = "每日单词组合造句"
+CREATING_RECOVERY_GRACE = timedelta(minutes=5)
 SYSTEM_MARKER_PATTERN = re.compile(r"\n?\[\[sentence-practice:clarification:[^\]]+\]\]\s*$")
 GROUP_HEADING_PATTERN = re.compile(r"^## 第 (\d+) 组\s*$", re.MULTILINE)
 
@@ -403,7 +405,17 @@ class SentencePracticeService:
             if remote is None:
                 remote = self.dida.get_task(task_record["task_id"])
             if remote is None:
-                if task_record["status"] != TASK_STATUS_CREATING:
+                if task_record["status"] == TASK_STATUS_CREATING:
+                    if self._creating_recovery_expired(task_record):
+                        self.state.update_task_observation(
+                            task_record["task_id"], status=TASK_STATUS_CREATE_FAILED
+                        )
+                        print(
+                            f"[每日造句] {task_record['practice_date']} 的本地预留任务"
+                            "超过 5 分钟仍不存在，已停止监控。",
+                            flush=True,
+                        )
+                else:
                     self.state.update_task_observation(
                         task_record["task_id"], status=TASK_STATUS_DELETED
                     )
@@ -433,6 +445,17 @@ class SentencePracticeService:
                 comment_count=comment_count,
                 etag=etag,
             )
+
+    def _creating_recovery_expired(self, task_record):
+        created_at = datetime.fromisoformat(task_record["created_at"])
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        now = self.now_provider()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=PRACTICE_TIMEZONE)
+        return now.astimezone(timezone.utc) - created_at.astimezone(
+            timezone.utc
+        ) >= CREATING_RECOVERY_GRACE
 
     def _run_claimed_action(self, interaction):
         if interaction["status"] == INTERACTION_STATUS_PROCESSING:

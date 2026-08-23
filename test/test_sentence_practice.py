@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
+import requests
+
 from constants.dida365 import VOCAB_BOOK_PROJECT_ID
 from dida365_project.models.task import Task
 from sentence_practice import (
@@ -28,6 +30,8 @@ from utils.sentence_practice_db import (
     INTERACTION_STATUS_QUEUED,
     INTERACTION_STATUS_SENDING_CLARIFICATION,
     TASK_STATUS_ACTIVE,
+    TASK_STATUS_CREATE_FAILED,
+    TASK_STATUS_CREATING,
     SentencePracticeStateStore,
 )
 
@@ -39,6 +43,7 @@ class FakeDida:
         self.active_tasks = []
         self.deleted_comment_ids = []
         self.posted_payloads = []
+        self.get_task_requests = []
         self.etag_counter = 0
 
     def _next_etag(self):
@@ -79,6 +84,7 @@ class FakeDida:
         self._refresh_active_tasks()
 
     def get_task(self, task_id):
+        self.get_task_requests.append(task_id)
         task = self.tasks.get(task_id)
         return deepcopy(task) if task else None
 
@@ -526,6 +532,59 @@ class SentencePracticeServiceTest(unittest.TestCase):
         self.assertEqual(created["status"], Task.STATUS_ACTIVE)
         self.assertIn("无需标注组号", created["content"])
 
+    def test_stale_creating_task_stops_being_monitored(self):
+        groups = [
+            {
+                "group_id": 1,
+                "words": ["orbit", "fragile"],
+                "task_ids": ["w1", "w2"],
+            }
+        ]
+        self.store.reserve_daily_task(
+            "2026-08-17", "stale-creating", VOCAB_BOOK_PROJECT_ID, "练习", groups
+        )
+        with self.store._connect() as connection:
+            connection.execute(
+                "UPDATE sentence_practice_tasks SET created_at = ? WHERE task_id = ?",
+                ("2026-08-17T03:54:59+00:00", "stale-creating"),
+            )
+        service = self.make_service([])
+
+        service.poll_and_process()
+        self.assertEqual(
+            self.store.get_task_by_id("stale-creating")["status"],
+            TASK_STATUS_CREATE_FAILED,
+        )
+        self.assertEqual(self.dida.get_task_requests, ["stale-creating"])
+
+        service.poll_and_process()
+        self.assertEqual(self.dida.get_task_requests, ["stale-creating"])
+
+    def test_recent_creating_task_keeps_recovery_window(self):
+        groups = [
+            {
+                "group_id": 1,
+                "words": ["orbit", "fragile"],
+                "task_ids": ["w1", "w2"],
+            }
+        ]
+        self.store.reserve_daily_task(
+            "2026-08-17", "recent-creating", VOCAB_BOOK_PROJECT_ID, "练习", groups
+        )
+        with self.store._connect() as connection:
+            connection.execute(
+                "UPDATE sentence_practice_tasks SET created_at = ? WHERE task_id = ?",
+                ("2026-08-17T03:56:01+00:00", "recent-creating"),
+            )
+
+        self.make_service([]).poll_and_process()
+
+        self.assertEqual(
+            self.store.get_task_by_id("recent-creating")["status"],
+            TASK_STATUS_CREATING,
+        )
+        self.assertEqual(self.dida.get_task_requests, ["recent-creating"])
+
     def test_direct_answer_is_written_back_then_comment_is_deleted(self):
         self.reserve_active_practice()
         self.dida.add_remote_comment(
@@ -676,6 +735,89 @@ class DidaCommentApiContractTest(unittest.TestCase):
         self.assertEqual(payload["replyCommentId"], "source-1")
         response.raise_for_status.assert_called_once()
 
+
+class DidaTaskApiContractTest(unittest.TestCase):
+    def make_client(self):
+        from dida365_project.api.dida365 import Dida365
+
+        client = Dida365.__new__(Dida365)
+        client._initialize_http()
+        client.session = Mock()
+        return client
+
+    @staticmethod
+    def make_response(status_code, *, json_data=None, raw_content=None):
+        response = requests.Response()
+        response.status_code = status_code
+        response.url = "https://api.dida365.com/api/v2/task/task-1"
+        if raw_content is not None:
+            response._content = raw_content
+        elif json_data is not None:
+            response._content = json.dumps(json_data).encode("utf-8")
+            response.headers["content-type"] = "application/json"
+        else:
+            response._content = b""
+        return response
+
+    def test_get_task_returns_none_for_404(self):
+        client = self.make_client()
+        client.session.get.return_value = self.make_response(404)
+
+        self.assertIsNone(client.get_task("task-1"))
+
+    def test_get_task_returns_none_for_task_not_found_500(self):
+        client = self.make_client()
+        client.session.get.return_value = self.make_response(
+            500,
+            json_data={
+                "errorCode": "task_not_found",
+                "errorMessage": "task not exists: task-1",
+            },
+        )
+
+        self.assertIsNone(client.get_task("task-1"))
+
+    def test_get_task_raises_for_other_500_error(self):
+        client = self.make_client()
+        client.session.get.return_value = self.make_response(
+            500,
+            json_data={"errorCode": "internal_error"},
+        )
+
+        with self.assertRaises(requests.HTTPError):
+            client.get_task("task-1")
+
+    def test_get_task_raises_for_malformed_500_response(self):
+        client = self.make_client()
+        client.session.get.return_value = self.make_response(
+            500,
+            raw_content=b"upstream failure",
+        )
+
+        with self.assertRaises(requests.HTTPError):
+            client.get_task("task-1")
+
+    def test_get_task_raises_for_non_object_500_response(self):
+        client = self.make_client()
+        client.session.get.return_value = self.make_response(
+            500,
+            json_data=["task_not_found"],
+        )
+
+        with self.assertRaises(requests.HTTPError):
+            client.get_task("task-1")
+
+    def test_get_task_returns_json_for_success(self):
+        client = self.make_client()
+        client.session.get.return_value = self.make_response(
+            200,
+            json_data={"id": "task-1", "title": "practice"},
+        )
+
+        self.assertEqual(
+            client.get_task("task-1"),
+            {"id": "task-1", "title": "practice"},
+        )
 
 if __name__ == "__main__":
     unittest.main()

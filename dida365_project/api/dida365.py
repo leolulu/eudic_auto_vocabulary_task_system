@@ -339,6 +339,13 @@ class Dida365:
         )
         if response.status_code == 404:
             return None
+        if response.status_code == 500:
+            try:
+                error = response.json()
+            except ValueError:
+                error = None
+            if isinstance(error, dict) and error.get("errorCode") == "task_not_found":
+                return None
         response.raise_for_status()
         return response.json()
 
