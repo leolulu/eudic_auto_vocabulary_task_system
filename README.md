@@ -20,7 +20,7 @@
 
 - 本机通过 [uv](https://docs.astral.sh/uv/) 管理 Python 与依赖（无需全局 Python）。
 - 依赖见 `requirements.txt`（requests、schedule、arrow、PyYAML、playwright 等）。
-- 百度音标与讲解视频的抓取依赖 Playwright（Chromium），首次使用需安装浏览器内核：`uv run playwright install chromium`。
+- 百度讲解视频优先通过 `vendor/baidu-video.mjs` 查询，需要 Node.js ≥ 18；Node 不可用或查询失败时回退到 Playwright（Chromium）。百度音标仍可能使用 Playwright，首次使用需安装浏览器内核：`uv run playwright install chromium`。
 
 ## 配置
 
@@ -148,7 +148,7 @@ python main.py --set-dida-t
 - [滴答清单 OpenAPI](https://developer.dida365.com/docs#/openapi)
 - [滴答清单 MCP](https://help.dida365.com/articles/7438132116019216384)
 
-因此本轮继续采用已经完整走通的私有 HTTP API。滴答清单认证和 API 调用链路不依赖网页自动化、Chrome MCP、Playwright 登录或邮件通道；浏览器只在人工调查和一次性取得现有 `t` 时使用。项目中为百度音标和讲解视频保留的 Playwright 抓取属于另一条数据来源链路，不参与滴答清单认证。
+因此本轮继续采用已经完整走通的私有 HTTP API。滴答清单认证和 API 调用链路不依赖网页自动化、Chrome MCP、Playwright 登录或邮件通道；浏览器只在人工调查和一次性取得现有 `t` 时使用。项目中为百度音标及讲解视频回退保留的 Playwright 抓取属于另一条数据来源链路，不参与滴答清单认证。
 
 ### 2. 429 事故现象
 

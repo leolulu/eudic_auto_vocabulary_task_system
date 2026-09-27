@@ -1,6 +1,9 @@
 import hashlib
+import json
 import re
+import subprocess
 import time
+from pathlib import Path
 
 import requests
 from playwright.sync_api import expect, sync_playwright
@@ -152,7 +155,38 @@ def get_all_phonetic(word: str) -> str:
         return result
 
 
-def query_word_explanation_video(word: str) -> list[str] | None:
+def _query_word_explanation_video_with_node(word: str) -> list[str]:
+    script = Path(__file__).resolve().parents[1] / "vendor" / "baidu-video.mjs"
+    completed = subprocess.run(
+        ["node", str(script), "--json", word],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+    )
+    results = json.loads(completed.stdout)
+    if not isinstance(results, list) or len(results) != 1 or not isinstance(results[0], dict):
+        raise ValueError("百度视频查询结果格式异常")
+
+    result = results[0]
+    if result.get("ok") is not True:
+        raise RuntimeError(f"百度视频查询失败: {result.get('failure') or result.get('errmsg')}")
+    if result.get("hasVideo") is False:
+        return []
+    video = result.get("video")
+    video_url = video.get("videoUrl") if isinstance(video, dict) else None
+    if result.get("hasVideo") is not True or not isinstance(video_url, str) or not video_url:
+        raise ValueError("百度视频查询结果缺少视频地址")
+    return [video_url]
+
+
+def query_word_explanation_video(word: str) -> list[str]:
+    try:
+        return _query_word_explanation_video_with_node(word)
+    except (OSError, subprocess.SubprocessError, ValueError, RuntimeError) as error:
+        print(f"Node 百度视频查询失败，改用 Playwright: {error}")
+
     url = f"https://fanyi.baidu.com/mtpe-individual/transText?query={word}&lang=en2zh"
     video_urls = set()
     with sync_playwright() as p:
