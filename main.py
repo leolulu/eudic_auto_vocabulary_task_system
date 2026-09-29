@@ -79,6 +79,25 @@ def log_scheduler_heartbeat():
     print(f"[服务心跳] {job_status}", flush=True)
 
 
+def _restore_player_context_brackets(context: str) -> str:
+    # 播放器生成的引用和加粗保持原样；手工加入代码标记时保留正文。
+    if re.search(r"(?<!\\)`", context):
+        return context
+
+    restored_lines = []
+    for line in context.split("\n"):
+        # 只还原单个反斜杠转义的方括号，连续反斜杠和其他标点不处理。
+        restored = re.sub(r"(?<!\\)\\([\[\]])", r"\1", line)
+        # 避免把字面文本变成链接、图片或引用式链接定义。
+        if re.search(r"\][ \t]*[\[(]", restored) or re.fullmatch(
+            r'''[ \t]*(?:>[ \t]*)?\[[^\]]+\]:[ \t]*\S+(?:[ \t]+["'(].*["')])?[ \t]*''',
+            restored,
+        ):
+            restored = line
+        restored_lines.append(restored)
+    return "\n".join(restored_lines)
+
+
 def format_note_for_task(note: str) -> str:
     normalized_note = note.replace("\r\n", "\n").replace("\r", "\n").strip()
     # 跨项目约定：字幕播放器用稳定的“**来源：**《”前缀标记已经排版的 Note。
@@ -90,6 +109,7 @@ def format_note_for_task(note: str) -> str:
         player_context = player_context.lstrip("\n")
         if not player_context:
             return GENERIC_NOTE_HEADING
+        player_context = _restore_player_context_brackets(player_context)
         return "\n".join([GENERIC_NOTE_HEADING, player_context])
 
     quoted_lines = [

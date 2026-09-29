@@ -197,6 +197,85 @@ class EudicNoteIntegrationTest(unittest.TestCase):
             "释义",
         )
 
+    def test_player_context_restores_brackets_in_actual_subtitle_samples(self):
+        samples = [
+            (
+                "That's an odd reaction.\n"
+                r"> \[**crickets** chirping\]" "\n"
+                r"> \[car approaching\]",
+                "That's an odd reaction.\n"
+                "> [**crickets** chirping]\n> [car approaching]",
+            ),
+            (
+                r"\[door closes\]" "\n"
+                r"> \[liquid **trickling**\]" "\n> ♪ ♪",
+                "[door closes]\n> [liquid **trickling**]\n> ♪ ♪",
+            ),
+            (
+                "I mean, you could kill yourself.\n"
+                "> You know, I'm just **spitballing** here.\n"
+                r"> \[fading\]: If you ever want to jump in with any ideas...",
+                "I mean, you could kill yourself.\n"
+                "> You know, I'm just **spitballing** here.\n"
+                "> [fading]: If you ever want to jump in with any ideas...",
+            ),
+        ]
+        for context, expected in samples:
+            with self.subTest(context=context):
+                note = "**来源：**《Demo》\n> " + context
+                response = Mock()
+                response.raise_for_status.return_value = None
+                response.json.return_value = {"data": {"note": note}}
+                with patch("agent.eudic.requests.get", return_value=response):
+                    fetched_note = Eudic("NIS test").get_note("word")
+
+                self.assertEqual(fetched_note, note)
+                self.assertEqual(
+                    compose_word_task_content("音标", fetched_note, "释义"),
+                    "音标\n\n**生词语境：**\n> " + expected + "\n\n释义",
+                )
+
+    def test_player_bracket_fix_leaves_other_escapes_and_task_sections_unchanged(self):
+        phonetic = r"/test\.sound/"
+        explanation = r"\[explanation\] \(text\) a\-b\."
+        context = (
+            r"> \[**word**\] C:\Media\Video \*literal\* \_text\_ "
+            r"good\.\.\. \(aside\) a\-b \\[literal\\] \\\[literal\\\]"
+        )
+        expected = context.replace(r"\[**word**\]", "[**word**]")
+
+        self.assertEqual(
+            compose_word_task_content(
+                phonetic, "**来源：**《Demo》\n" + context, explanation,
+            ),
+            f"{phonetic}\n\n**生词语境：**\n{expected}\n\n{explanation}",
+        )
+
+    def test_player_bracket_fix_preserves_code_and_link_like_text(self):
+        contexts = [
+            r"> `\[code\]`",
+            r"> \[label\](https://example.test)",
+            r"> !\[image\](https://example.test/image.png)",
+            r"> \[label\] \[reference\]",
+            r"> \[reference\]: https://example.test",
+            r"> [link](https://example.test/\[path\])",
+        ]
+        for context in contexts:
+            with self.subTest(context=context):
+                self.assertEqual(
+                    compose_word_task_content(
+                        "音标", "**来源：**《Demo》\n" + context, "释义",
+                    ),
+                    f"音标\n\n**生词语境：**\n{context}\n\n释义",
+                )
+
+    def test_bracket_fix_does_not_apply_to_ordinary_notes(self):
+        note = r"\[**word**\]"
+        self.assertEqual(
+            compose_word_task_content("音标", note, "释义"),
+            f"音标\n\n**生词语境：**\n> {note}\n\n释义",
+        )
+
     def test_compose_task_content_quotes_multiline_note_and_preserves_markdown(self):
         content = compose_word_task_content(
             "音标",
