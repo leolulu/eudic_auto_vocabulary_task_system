@@ -4,12 +4,14 @@ import os
 import sys
 import time
 import uuid
+from functools import partial
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.cookiejar import LoadError, MozillaCookieJar
 from pathlib import Path
 
 import requests
+from utils.logging_util import log_event, logged_request, register_secrets
 
 from ..models.project import Project
 from ..models.task import Task
@@ -139,7 +141,7 @@ class Dida365:
 
     def is_session_valid(self):
         try:
-            response = self.session.get(
+            response = logged_request("dida", self.session.get, "GET",
                 self.AUTH_CHECK_URL,
                 headers=self.headers,
                 timeout=self.AUTH_REQUEST_TIMEOUT_SECONDS,
@@ -155,13 +157,13 @@ class Dida365:
         return True
 
     def login(self, username, password):
+        register_secrets(username=username, password=password)
         self.raise_if_login_is_cooling_down()
         url = self.base_url + "/user/signon?wc=true&remember=true"
         data = json.dumps({"username": username, "password": password})
         response = None
         try:
-            response = self.session.request(
-                "POST",
+            response = logged_request("dida", partial(self.session.request, "POST"), "POST",
                 url,
                 headers=self.headers,
                 data=data,
@@ -183,13 +185,14 @@ class Dida365:
     @classmethod
     def import_session_cookie(cls, t_value, session_file=None, auth_state_file=None):
         t_value = t_value.strip()
+        register_secrets(t=t_value)
         if not t_value:
             raise ValueError("滴答清单登录会话 t 不能为空")
 
         client = cls.__new__(cls)
         client._initialize_http(session_file=session_file, auth_state_file=auth_state_file)
         client.session.cookies.set("t", t_value, domain=".dida365.com", path="/")
-        response = client.session.get(
+        response = logged_request("dida", client.session.get, "GET",
             client.AUTH_CHECK_URL,
             headers=client.headers,
             timeout=client.AUTH_REQUEST_TIMEOUT_SECONDS,
@@ -254,6 +257,8 @@ class Dida365:
                 "last_error_code": error_code,
             }
         )
+        log_event("dida", "login_cooldown", consecutive_failures=consecutive_failures,
+                  status=status_code, error_code=error_code, next_login_at=next_login_at)
         print(
             "滴答清单：登录失败，已暂停后续登录请求，冷却至 "
             f"{_format_local_timestamp(next_login_at)}。"
@@ -312,7 +317,7 @@ class Dida365:
 
     def get_data(self):
         url = self.base_url + "/batch/check/0"
-        r = self.session.get(url, headers=self.headers, timeout=self.READ_REQUEST_TIMEOUT)
+        r = logged_request("dida", self.session.get, "GET", url, headers=self.headers, timeout=self.READ_REQUEST_TIMEOUT)
         r.raise_for_status()
         self.data = json.loads(r.content)
         self._get_projects()
@@ -321,7 +326,7 @@ class Dida365:
     def search(self, keyword: str):
         url = self.base_url + "/search/all"
         params = {"keywords": keyword}
-        r = self.session.get(
+        r = logged_request("dida", self.session.get, "GET",
             url,
             headers=self.headers,
             params=params,
@@ -332,7 +337,7 @@ class Dida365:
 
     def get_task(self, task_id: str):
         url = self.base_url + f"/task/{task_id}"
-        response = self.session.get(
+        response = logged_request("dida", self.session.get, "GET",
             url,
             headers=self.headers,
             timeout=self.READ_REQUEST_TIMEOUT,
@@ -353,7 +358,7 @@ class Dida365:
         # 实测只有带 projectId 的评论列表路径会返回完整数据；
         # /task/{taskId}/comments 即使存在评论也可能返回空数组。
         url = self.base_url + f"/project/{project_id}/task/{task_id}/comments"
-        response = self.session.get(
+        response = logged_request("dida", self.session.get, "GET",
             url,
             headers=self.headers,
             timeout=self.READ_REQUEST_TIMEOUT,
@@ -434,11 +439,13 @@ class Dida365:
         """只重试尚未建立连接的超时；响应阶段超时可能已经写入成功。"""
         for attempt in range(1, self.WRITE_CONNECT_RETRY_ATTEMPTS + 1):
             try:
-                return self.session.request(method, url, timeout=timeout, **kwargs)
+                return logged_request("dida", partial(self.session.request, method), method, url, timeout=timeout, **kwargs)
             except requests.ConnectTimeout:
                 if attempt >= self.WRITE_CONNECT_RETRY_ATTEMPTS:
                     raise
                 delay = self.WRITE_CONNECT_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+                log_event("dida", "connect_retry", attempt=attempt, next_attempt=attempt + 1,
+                          delay_seconds=delay, method=method)
                 print(
                     f"滴答写请求连接超时，{delay} 秒后进行第 {attempt + 1} 次尝试。",
                     file=sys.stderr,

@@ -22,6 +22,29 @@
 - 依赖见 `requirements.txt`（requests、schedule、arrow、PyYAML、playwright 等）。
 - 百度讲解视频优先通过 `vendor/baidu-video.mjs` 查询，需要 Node.js ≥ 18；Node 不可用或查询失败时回退到 Playwright（Chromium）。百度音标仍可能使用 Playwright，首次使用需安装浏览器内核：`uv run playwright install chromium`。
 
+## 日志与排错
+
+日志自动追加到项目根目录的 `logs/`，与启动时所在目录无关。使用 Python 标准库 `logging`，每行是一条 UTF-8 JSON 记录；当前不做轮换或自动删除，重启后继续追加。该目录已被 Git 忽略。
+
+| 文件 | 内容 |
+| --- | --- |
+| `runtime.log` | 启动、退出、心跳、定时任务开始/完成/失败、每日造句交互处理 |
+| `ai.log` | 当前 AI 服务的请求、响应、网络错误，以及每日造句 AI 结果解析 |
+| `dida.log` | 滴答登录/会话校验、任务/评论/附件请求、连接重试、登录冷却 |
+| `eudic.log` | 欧路开放 API、图片下载、桌面 App 私有同步请求和业务错误 |
+| `anki.log` | Anki 服务请求与同步错误 |
+| `media.log` | 发音/视频下载、HTTP 音标请求、浏览器音标失败、视频查询回退 |
+| `http.log` | 备用通用会话客户端的 HTTP 请求 |
+| `errors.log` | 各分类的 ERROR 记录汇总，包含 HTTP 4xx/5xx、已识别的业务错误、异常堆栈 |
+
+请求日志保留 `request_id`、方法、脱敏 URL、参数、超时设置、状态码、耗时、正文长度、截断标记及部分响应头（如上游请求 ID、`Retry-After`）。定时任务使用 `run_id`，任务内请求会继承同一 ID；单词、任务和每日造句交互在对应链路中另附上下文字段。HTTP 200 中的 `errorCode`、`error`、`id2error` 也会提取到 `upstream` 字段并汇总为错误。JSON 的关键状态字段单独保存，不依赖正文预览的位置。
+
+普通请求/响应预览最多 1024 字符，HTTP 错误响应和 AI 解析失败预览最多 4096 字符；结构化数据中的普通文本字段最多 512 字符，列表最多 20 项、对象最多 30 个键、嵌套深度最多 6 层，异常消息最多 2048 字符、堆栈最多 8192 字符。图片、音视频和二进制附件不记录内容，只保留长度、类型和上传文件元信息，日志操作不会读取或移动上传流的当前位置。
+
+认证请求体和登录响应正文省略；密码、API Key、Authorization、Cookie、签名及 URL 中的敏感参数脱敏。正文中的已知凭据回显也会脱敏。日志仍可能包含问题、回答和笔记的短片段，分享前需要检查。日志只覆盖本项目发出的请求；上游 AI 服务内部的调用详情仍需查该服务自身日志。
+
+排错时先看 `errors.log`，通过 `run_id`、`request_id` 或 `interaction_id` 在对应分类文件中找到前后的记录。`request_started` 没有后续记录可用于判断调用中断；`response_received` 的 `status` 与 `upstream` 可区分 HTTP 错误和业务错误；`review_parse_failed` 会保留 AI 原始回答的有限预览。每条记录包含 UTC 时间（`+00:00`）和进程 PID。日志每次写入后刷新；写入失败时会向 stderr 输出脱敏后的备用记录。
+
 ## 配置
 
 首次运行若没有 `config.yaml`，程序会在项目根目录自动生成一份模板并提示补全。配置项如下：

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import random
 import re
 import uuid
@@ -31,6 +32,7 @@ from utils.sentence_practice_db import (
     TASK_STATUS_DELETED,
     SentencePracticeStateStore,
 )
+from utils.logging_util import body_summary, log_context, log_event
 
 
 PRACTICE_TIMEZONE = ZoneInfo("Asia/Shanghai")
@@ -296,6 +298,7 @@ class SentencePracticeService:
         practice_date = self.now_provider().astimezone(PRACTICE_TIMEZONE).date().isoformat()
         candidates = self.dida_agent.get_today_vocabulary_tasks()
         if not candidates:
+            log_event("runtime", "practice_generation_skipped", practice_date=practice_date, reason="no_due_words")
             print(f"[每日造句] {practice_date} 没有当天到期单词，跳过创建。", flush=True)
             return None
 
@@ -363,6 +366,8 @@ class SentencePracticeService:
             f"[每日造句] 已创建 {practice_date} 练习：{len(candidates)} 个单词，{len(groups)} 组。",
             flush=True,
         )
+        log_event("runtime", "practice_task_created", practice_date=practice_date,
+                  task_id=existing["task_id"], word_count=len(candidates), group_count=len(groups))
         return self.state.get_task_by_id(existing["task_id"])
 
     def poll_and_process(self, max_actions=20):
@@ -374,8 +379,14 @@ class SentencePracticeService:
                 break
             resume_status = self._resume_status(interaction["status"])
             try:
-                self._run_claimed_action(interaction)
+                with log_context(interaction_id=interaction["id"], task_id=interaction["task_id"],
+                                 interaction_status=interaction["status"]):
+                    log_event("runtime", "interaction_started")
+                    self._run_claimed_action(interaction)
+                    log_event("runtime", "interaction_completed")
             except Exception as error:
+                log_event("runtime", "interaction_failed", level=logging.ERROR, error=error,
+                          interaction_id=interaction["id"], task_id=interaction["task_id"], resume_status=resume_status)
                 self.state.record_failure(interaction["id"], resume_status, error)
                 print(
                     f"[每日造句] 交互 {interaction['id']} 处理失败，将重试：{type(error).__name__}: {error}",
@@ -501,10 +512,16 @@ class SentencePracticeService:
             user_prompt,
             system_message=SYSTEM_SENTENCE_PRACTICE_REVIEWER,
         )
-        ai_result = parse_ai_review(
-            raw_response,
-            {group["group_id"] for group in groups},
-        )
+        try:
+            ai_result = parse_ai_review(
+                raw_response,
+                {group["group_id"] for group in groups},
+            )
+        except Exception as error:
+            log_event("ai", "review_parse_failed", level=logging.ERROR, error=error,
+                      response_body=body_summary(raw_response, limit=4096))
+            raise
+        log_event("ai", "review_parsed", action=ai_result["action"])
         if ai_result["action"] == "clarify":
             latest_user_comment = next(
                 comment

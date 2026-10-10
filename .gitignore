@@ -5,6 +5,8 @@ word_his.db
 runtime_state.sqlite3
 runtime_state.sqlite3-shm
 runtime_state.sqlite3-wal
+/logs/
+/.test-tmp/
 
 ttt.py
 

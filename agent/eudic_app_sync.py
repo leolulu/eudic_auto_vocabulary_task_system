@@ -22,6 +22,7 @@ from pathlib import Path
 
 import requests
 import yaml
+from utils.logging_util import logged_request, register_secrets
 
 from constants.yaml import CONFIG_FILE_NAME, EUDIC_SYNC_TOKEN, EUDIC_SYNC_USER_ID
 
@@ -62,6 +63,7 @@ class EudicAppSyncClient:
         self.config_path = Path(config_path)
         self.yaml_config_path = Path(yaml_config_path)
         self.credentials = self._load_credentials()
+        register_secrets(token=self.credentials.token, userid=self.credentials.user_id)
         self.session = session or requests.Session()
         # 已验证的桌面 App 链路不读取系统代理；避免代理改写私有同步请求。
         self.session.trust_env = False
@@ -166,7 +168,7 @@ class EudicAppSyncClient:
 
     def _sync(self, xml: str) -> ET.Element:
         try:
-            response = self.session.post(
+            response = logged_request("eudic", self.session.post, "POST",
                 EUDIC_APP_BASE_URL + EUDIC_APP_SYNC_PATH,
                 headers=self._headers(EUDIC_APP_SYNC_PATH),
                 data={"productid": "23", "langid": "3", "msgz": self._encode_sync(xml)},
@@ -226,7 +228,7 @@ class EudicAppSyncClient:
         ]
         files.append(("body", (None, body)))
         try:
-            response = self.session.post(
+            response = logged_request("eudic", self.session.post, "POST",
                 EUDIC_APP_BASE_URL + EUDIC_APP_UPLOAD_PATH,
                 headers=self._headers(EUDIC_APP_UPLOAD_PATH),
                 files=files,

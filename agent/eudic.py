@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import requests
+from utils.logging_util import logged_request
 
 from constants.eudic import (
     DEFAULT_VOCAB_BOOK_NAME,
@@ -148,7 +149,7 @@ class Eudic:
         params = {
             "language": "en",
         }
-        res = requests.get(
+        res = logged_request("eudic", requests.get, "GET",
             url,
             headers=self.headers,
             params=params,
@@ -174,7 +175,7 @@ class Eudic:
             "word": word,
         }
         try:
-            res = requests.get(
+            res = logged_request("eudic", requests.get, "GET",
                 GET_NOTE_URL,
                 headers=self.headers,
                 params=params,
@@ -244,8 +245,7 @@ class Eudic:
         for index, image in enumerate(images, start=1):
             self._validate_note_image_url(image.url)
             try:
-                response = requests.get(
-                    image.url,
+                response = logged_request("eudic", requests.get, "GET", image.url, log_response_body=False,
                     headers=self.headers,
                     timeout=EUDIC_IMAGE_DOWNLOAD_TIMEOUT,
                 )
@@ -278,7 +278,7 @@ class Eudic:
             "word": word,
         }
         try:
-            res = requests.get(
+            res = logged_request("eudic", requests.get, "GET",
                 WORD_URL,
                 headers=self.headers,
                 params=params,
@@ -307,7 +307,7 @@ class Eudic:
 
     def save_note(self, word: str, note: str) -> None:
         try:
-            res = requests.post(
+            res = logged_request("eudic", requests.post, "POST",
                 GET_NOTE_URL,
                 headers=self.headers,
                 json={
@@ -324,7 +324,7 @@ class Eudic:
 
     def add_word(self, word: str) -> None:
         try:
-            res = requests.post(
+            res = logged_request("eudic", requests.post, "POST",
                 WORD_URL,
                 headers=self.headers,
                 json={
@@ -351,7 +351,7 @@ class Eudic:
             "page": page,
             "page_size": page_size,
         }
-        res = requests.get(
+        res = logged_request("eudic", requests.get, "GET",
             url,
             headers=self.headers,
             params=params,

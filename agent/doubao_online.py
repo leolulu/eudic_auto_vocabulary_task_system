@@ -1,4 +1,5 @@
 import requests
+from utils.logging_util import logged_request
 
 from constants.doubao import PAYLOAD_SYSTEM_MESSAGE, PAYLOAD_USER_MESSAGE
 
@@ -21,6 +22,6 @@ class DoubaoOnline:
             PAYLOAD_SYSTEM_MESSAGE: self.system_message,
             PAYLOAD_USER_MESSAGE: user_message,
         }
-        res = requests.post(self.endpoint, json=Payload, timeout=DOUBAO_REQUEST_TIMEOUT)
+        res = logged_request("ai", requests.post, "POST", self.endpoint, json=Payload, timeout=DOUBAO_REQUEST_TIMEOUT)
         res.raise_for_status()
         return res.text

@@ -1,9 +1,11 @@
 import argparse
 import getpass
+import logging
 import re
 import sys
 import time
 import traceback
+import uuid
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -37,6 +39,7 @@ from utils.phonetic_util import get_all_phonetic
 from utils.datetime_util import parse_eudic_api_time
 from utils.word_his_db import add_word_to_his_set, if_exists_in_his_set
 from utils.yaml_config_manager import YamlConfigManager
+from utils.logging_util import install_exception_logging, log_context, log_event
 
 
 SCHEDULED_JOB_LAST_SUCCESS: dict[str, str] = {}
@@ -45,14 +48,21 @@ GENERIC_NOTE_HEADING = "**生词语境：**"
 
 
 def run_scheduled_job(name: str, job, *, log_success: bool = False):
+    with log_context(job=name, run_id=uuid.uuid4().hex):
+        return _run_scheduled_job(name, job, log_success=log_success)
+
+
+def _run_scheduled_job(name: str, job, *, log_success: bool = False):
     """记录任务边界；失败后继续抛出，让 systemd 按既有策略重启。"""
     started_at = time.monotonic()
+    log_event("runtime", "job_started")
     if log_success:
         print(f"[调度任务开始] {name}", flush=True)
     try:
         result = job()
     except Exception as error:
         elapsed = time.monotonic() - started_at
+        log_event("runtime", "job_failed", level=logging.ERROR, error=error, duration_ms=round(elapsed * 1000, 1))
         print(
             f"[调度任务失败] {name}，耗时 {elapsed:.1f} 秒：{type(error).__name__}: {error}",
             file=sys.stderr,
@@ -62,6 +72,7 @@ def run_scheduled_job(name: str, job, *, log_success: bool = False):
 
     completed_at = datetime.now().astimezone().isoformat(timespec="seconds")
     SCHEDULED_JOB_LAST_SUCCESS[name] = completed_at
+    log_event("runtime", "job_completed", duration_ms=round((time.monotonic() - started_at) * 1000, 1))
     if log_success:
         elapsed = time.monotonic() - started_at
         print(f"[调度任务完成] {name}，耗时 {elapsed:.1f} 秒", flush=True)
@@ -69,6 +80,7 @@ def run_scheduled_job(name: str, job, *, log_success: bool = False):
 
 
 def log_scheduler_heartbeat():
+    log_event("runtime", "heartbeat", last_success=SCHEDULED_JOB_LAST_SUCCESS)
     if SCHEDULED_JOB_LAST_SUCCESS:
         job_status = "；".join(
             f"{name}={completed_at}"
@@ -409,6 +421,7 @@ class Bearer:
                     word.note_images = note_data.images if note_data is not None else ()
                     words_with_notes.append(word)
                 except EudicNoteFetchError as error:
+                    log_event("eudic", "note_fetch_skipped", level=logging.ERROR, error=error, word=word.word)
                     print(f"{error}，本轮跳过，下一轮继续重试。", flush=True)
             words = words_with_notes
         return list(words)
@@ -425,14 +438,17 @@ class Bearer:
         """deprecated"""
         words = self.acquire_words(7, include_notes=True)
         if words:
+            log_event("runtime", "words_detected", count=len(words), words=[word.word for word in words])
             print(f"添加单词本生词:{words}", flush=True)
         for word in words:
             try:
                 note_image_files = self.agent.eudic.download_note_images(word.note_images)
             except EudicNoteImageDownloadError as error:
+                log_event("eudic", "image_download_skipped", level=logging.ERROR, error=error, word=word.word)
                 print(f"{error}，本轮跳过，下一轮继续重试。", flush=True)
                 continue
-            content = self.get_doubao_explanation_by_doubao(word.word)
+            with log_context(word=word.word, operation="word_explanation"):
+                content = self.get_doubao_explanation_by_doubao(word.word)
             content += "\n\n[通过web添加anki生词](" + f"{YamlConfigManager().get_config(ANKI_PUSH_ENDPOINT)}?word={quote(word.word)}" + ")"
             content = compose_word_task_content(
                 get_all_phonetic(word.word),
@@ -447,28 +463,32 @@ class Bearer:
                     content,
                     note_image_files=note_image_files,
                 )
-            except:  # noqa: E722
+            except BaseException as error:
+                log_event("dida", "word_sync_failed", level=logging.ERROR, error=error, word=word.word)
                 traceback.print_exc()
             else:
                 sync_succeeded = True
+                log_event("dida", "word_sync_completed", word=word.word)
             # 图片任务只有在附件和正文引用都校验完成后才能进入历史；无图任务保留
             # 旧行为，以免发音或视频附件的既有容错语义发生无关变化。
             if sync_succeeded or not note_image_files:
                 try:
                     self.agent.dida.find_task(word.word, if_reload_data=True)
                     add_word_to_his_set(word.word)
-                except:  # noqa: E722
-                    pass
+                except BaseException as error:
+                    log_event("runtime", "word_history_update_failed", level=logging.ERROR, error=error, word=word.word)
 
     def bear_eudic_to_anki(self):
         words = self.acquire_words(7)
         print(f"添加单词本生词:{words}")
         for word in words:
-            content = self.get_doubao_explanation_by_doubao(word.word)
+            with log_context(word=word.word, operation="word_explanation"):
+                content = self.get_doubao_explanation_by_doubao(word.word)
             content = markdown_to_html(content)
             try:
                 self.agent.anki_client.add_note(word.word, content)
-            except:  # noqa: E722
+            except BaseException as error:
+                log_event("anki", "word_sync_failed", level=logging.ERROR, error=error, word=word.word)
                 traceback.print_exc()
             finally:
                 if self.agent.anki_client.search_note_existence(word.word):
@@ -485,6 +505,8 @@ class Bearer:
             if questions:
                 task_with_question.append((task, questions))
         if task_with_question:
+            log_event("runtime", "questions_detected", task_count=len(task_with_question),
+                      question_count=sum(len(questions) for _, questions in task_with_question))
             print(f"搜索问题结果:{task_with_question}", flush=True)
         return task_with_question
 
@@ -500,7 +522,8 @@ class Bearer:
                         USER_ASK_EXP,
                     )
                 )
-                answer = self.agent.doubao.chat(question)
+                with log_context(task_id=task.id, word=task.title, operation="answer_question"):
+                    answer = self.agent.doubao.chat(question)
                 answer = answer.strip()
                 task.update_content(
                     task.content.replace(
@@ -509,6 +532,7 @@ class Bearer:
                     )
                 )
             self.agent.dida.update_task(task.task_dict)
+            log_event("dida", "questions_applied", task_id=task.id, question_count=len(questions))
 
     def search_and_answer_questions_from_anki(self):
         note_with_question: list[UserQuery] = self.agent.anki_client.search_user_query()
@@ -522,7 +546,8 @@ class Bearer:
                     USER_ASK_EXP,
                 )
             )
-            answer = self.agent.doubao.chat(user_query.query)
+            with log_context(note_id=user_query.id, operation="answer_question"):
+                answer = self.agent.doubao.chat(user_query.query)
             answer = answer.strip()
             answer = re.sub(r"\*\*\*\*(.*?)\*\*\*\*", r"<b><i>\1</i></b>", answer)
             answer = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", answer)
@@ -535,6 +560,8 @@ class Bearer:
 
 
 if __name__ == "__main__":
+    install_exception_logging()
+    log_event("runtime", "process_started")
     parser = build_argument_parser()
     args = parser.parse_args()
     note = resolve_note_argument(parser, args)
@@ -545,13 +572,16 @@ if __name__ == "__main__":
         try:
             Dida365Api.import_session_cookie(t_value)
         except ValueError as error:
+            log_event("runtime", "session_import_failed", level=logging.ERROR, error=error)
             print(f"导入失败：{error}")
             raise SystemExit(1) from error
         except requests.RequestException as error:
+            log_event("runtime", "session_import_failed", level=logging.ERROR, error=error)
             status_code = error.response.status_code if error.response is not None else "网络错误"
             print(f"暂时无法验证 t，会话文件未修改。状态：{status_code}")
             raise SystemExit(1) from error
         except OSError as error:
+            log_event("runtime", "session_import_failed", level=logging.ERROR, error=error)
             print("无法安全写入滴答清单会话文件，请检查目录权限。")
             raise SystemExit(1) from error
         print("滴答清单 t 已验证并安全保存。")
@@ -567,6 +597,7 @@ if __name__ == "__main__":
                 note_image_paths=note_image_paths,
             )
         except (EudicPublishError, ValueError) as error:
+            log_event("eudic", "word_publish_failed", level=logging.ERROR, error=error, word=args.add_word)
             print(f"添加失败：{error}", file=sys.stderr)
             raise SystemExit(1) from error
         raise SystemExit(0)
@@ -574,6 +605,7 @@ if __name__ == "__main__":
     try:
         b = Bearer()
     except (DidaLoginCooldownError, DidaSessionValidationError, DidaSignInError) as error:
+        log_event("runtime", "startup_failed", level=logging.ERROR, error=error)
         print(error)
         raise SystemExit(75) from error
 
@@ -607,8 +639,10 @@ if __name__ == "__main__":
     )
     schedule.every(1).minutes.do(log_scheduler_heartbeat)
     print("[服务启动] 定时任务调度已开始。", flush=True)
+    log_event("runtime", "scheduler_started")
 
     for _ in range(3600):  # 只运行1小时
         schedule.run_pending()
         time.sleep(1)
     print("[服务退出] 已达到一小时运行周期。", flush=True)
+    log_event("runtime", "scheduler_stopped", reason="one_hour_cycle")

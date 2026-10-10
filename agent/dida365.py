@@ -1,10 +1,12 @@
 import io
+import logging
 import re
 from time import sleep
 
 
 
 import requests
+from utils.logging_util import log_event, logged_request, safe_url
 
 from constants.dida365 import PROJECT_WORDS, VOCAB_BOOK_PROJECT_ID
 from constants.eudic import EUDIC_NOTE_IMAGES_PLACEHOLDER
@@ -183,6 +185,7 @@ class Dida365Agent:
                 rearrange_content(task, leading_file_strings, note_image_file_strings)
                 print("Content rearranged, put dictvoice ahead.")
             except Exception as e:
+                log_event("dida", "attachment_content_rearrange_failed", level=logging.ERROR, error=e, task_id=task.id)
                 print(f"Error occurred when rearranging content: {e}")
                 raise
         else:
@@ -236,7 +239,7 @@ class Dida365Agent:
             for attempt in range(max_retries):
                 try:
                     headers = {"User-Agent": HEADER_CHROME_UA}
-                    response = requests.get(url, headers=headers, timeout=MEDIA_DOWNLOAD_TIMEOUT)
+                    response = logged_request("media", requests.get, "GET", url, log_response_body=False, headers=headers, timeout=MEDIA_DOWNLOAD_TIMEOUT)
                     response.raise_for_status()
 
                     # 从URL提取文件名
@@ -246,6 +249,9 @@ class Dida365Agent:
 
                     return (filename, io.BytesIO(response.content))
                 except Exception as e:
+                    log_event("media", "video_download_failed", level=logging.ERROR, error=e,
+                              word=word, url=safe_url(url), attempt=attempt + 1,
+                              max_attempts=max_retries, retry_delay_seconds=2**attempt if attempt < max_retries - 1 else None)
                     print(f"下载视频失败 [URL: {url}] (尝试 {attempt + 1}/{max_retries}): {e}")
                     if attempt < max_retries - 1:  # 不是最后一次尝试
                         sleep(2**attempt)  # 指数退避
@@ -258,6 +264,7 @@ class Dida365Agent:
         try:
             voice_files = get_dictvoice_bytes(word)
         except requests.RequestException as error:
+            log_event("media", "voice_download_skipped", level=logging.ERROR, error=error, word=word)
             # 部分罕见词会被词典语音接口以 5xx 拒绝；语音属于可选增强，
             # 不能因此阻断欧路 Note 图片等其他附件。
             print(f"警告: 单词 '{word}' 的发音音频下载失败，将继续处理其他附件：{error}")

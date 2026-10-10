@@ -1,11 +1,13 @@
 import hashlib
 import json
+import logging
 import re
 import subprocess
 import time
 from pathlib import Path
 
 import requests
+from utils.logging_util import log_event, logged_request
 from playwright.sync_api import expect, sync_playwright
 
 """
@@ -17,13 +19,14 @@ from playwright.sync_api import expect, sync_playwright
 def get_phonetic_by_youdao(word):
     try:
         url = "https://www.youdao.com/result?word={word}&lang=en"
-        res = requests.get(url.format(word=word), timeout=10)
+        res = logged_request("media", requests.get, "GET", url.format(word=word), timeout=10)
         for i in re.findall("per-phone.*?点击发音", res.text):
             if "美" in i:
                 for i in re.findall(r"phonetic.*?span", i):
                     for i in re.findall(r"/(.*?)/", i):
                         return i.strip()
     except Exception as e:
+        log_event("media", "phonetic_failed", level=logging.ERROR, error=e, source="youdao", word=word)
         print(f"通过有道词典获取音标失败: {e}")
     return None
 
@@ -31,10 +34,11 @@ def get_phonetic_by_youdao(word):
 def get_phonetic_by_bing(word):
     try:
         url = "https://cn.bing.com/dict/search?q={word}"
-        res = requests.get(url.format(word=word), timeout=10)
+        res = logged_request("media", requests.get, "GET", url.format(word=word), timeout=10)
         for i in re.findall(r"美.*?\[(.*?)\]", res.text):
             return i.strip()
     except Exception as e:
+        log_event("media", "phonetic_failed", level=logging.ERROR, error=e, source="bing", word=word)
         print(f"通过必应词典获取音标失败: {e}")
     return None
 
@@ -61,6 +65,7 @@ def get_phonetic_by_baidu(word):
             finally:
                 browser.close()
     except Exception as e:
+        log_event("media", "phonetic_failed", level=logging.ERROR, error=e, source="baidu_browser", word=word)
         print(f"使用playwright进行百度音标获取失败:\n {e}")
         return None
     return phonetic
@@ -81,7 +86,7 @@ def get_phonetic_by_ciba(word):
     signature = hashlib.md5(signature_source.encode("utf-8")).hexdigest()
 
     try:
-        res = requests.get(
+        res = logged_request("media", requests.get, "GET",
             f"https://dict.iciba.com{api_path}",
             params={
                 "client": client,
@@ -115,6 +120,7 @@ def get_phonetic_by_ciba(word):
         if isinstance(symbol, dict) and (phonetic := str(symbol.get("ph_am") or "").strip()):
             return phonetic
     except Exception as e:
+        log_event("media", "phonetic_failed", level=logging.ERROR, error=e, source="ciba", word=word)
         print(f"通过金山词霸获取音标失败: {e}")
     return None
 
@@ -185,6 +191,7 @@ def query_word_explanation_video(word: str) -> list[str]:
     try:
         return _query_word_explanation_video_with_node(word)
     except (OSError, subprocess.SubprocessError, ValueError, RuntimeError) as error:
+        log_event("media", "video_query_fallback", level=logging.WARNING, error=error, word=word)
         print(f"Node 百度视频查询失败，改用 Playwright: {error}")
 
     url = f"https://fanyi.baidu.com/mtpe-individual/transText?query={word}&lang=en2zh"

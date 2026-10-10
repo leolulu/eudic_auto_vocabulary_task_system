@@ -1,6 +1,7 @@
 import pickle
 import requests
 import os
+from utils.logging_util import logged_request
 
 
 class Client:
@@ -24,11 +25,11 @@ class Client:
         self.session.headers.update(header)
 
     def get(self, url):
-        response = self.session.get(url)
+        response = logged_request("http", self.session.get, "GET", url)
         self._save_session()
         return response
 
     def post(self, url, data):
-        response = self.session.post(url, data)
+        response = logged_request("http", self.session.post, "POST", url, data=data)
         self._save_session()
         return response

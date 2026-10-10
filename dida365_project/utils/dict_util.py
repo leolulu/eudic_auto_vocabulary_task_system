@@ -6,6 +6,8 @@ from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.webdriver import WebDriver as EdgeWebDriver
 import traceback
+import logging
+from utils.logging_util import log_event, logged_request
 
 
 class FreeDictionary:
@@ -19,14 +21,14 @@ class FreeDictionary:
 
     def _get_definitions(self, word):
         try:
-            response = requests.get(FreeDictionary.API.format(word=word))
+            response = logged_request("media", requests.get, "GET", FreeDictionary.API.format(word=word))
             response.raise_for_status()
             result = json.loads(response.content)
             if isinstance(result, list) and len(result) > 0:
                 self.if_definitions_found = True
                 self.result = result
-        except:
-            pass
+        except BaseException as error:
+            log_event("media", "dictionary_lookup_failed", level=logging.ERROR, error=error, source="free_dictionary", word=word)
 
     def _get_phonetic(self):
         def format(p):
@@ -109,5 +111,6 @@ class BaiduFanyi:
             if len(phonetics_info) > 0:
                 self.phonetic_string = "   ".join([f"{i[0]}{i[-1]}" for i in phonetics_info])
                 self.if_definitions_found = True
-        except:
+        except BaseException as error:
+            log_event("media", "phonetic_failed", level=logging.ERROR, error=error, source="baidu_selenium", word=word)
             traceback.print_exc()
