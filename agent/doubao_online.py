@@ -4,7 +4,7 @@ from utils.logging_util import logged_request
 from constants.doubao import PAYLOAD_SYSTEM_MESSAGE, PAYLOAD_USER_MESSAGE
 
 
-DOUBAO_REQUEST_TIMEOUT = (5, 180)
+DOUBAO_REQUEST_TIMEOUT = (5, 300)
 
 
 class DoubaoOnline:
