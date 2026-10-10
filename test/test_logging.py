@@ -155,10 +155,9 @@ class LoggingTest(unittest.TestCase):
         self.assertEqual(event["interaction_id"], 5)
         self.assertEqual(event["response_body"]["preview"], "invalid AI output")
 
-    def test_scheduler_logs_success_and_preserves_failed_job_behavior(self):
+    def test_scheduler_logs_success_and_contains_failed_job(self):
         run_scheduled_job("success", lambda: None)
-        with self.assertRaises(ValueError):
-            run_scheduled_job("failure", Mock(side_effect=ValueError("boom")))
+        self.assertIsNone(run_scheduled_job("failure", Mock(side_effect=ValueError("boom"))))
         self.assertEqual([event["event"] for event in self.events("runtime")],
                          ["job_started", "job_completed", "job_started", "job_failed"])
         self.assertEqual(self.events("runtime")[0]["run_id"], self.events("runtime")[1]["run_id"])

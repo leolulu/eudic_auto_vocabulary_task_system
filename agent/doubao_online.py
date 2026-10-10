@@ -24,4 +24,6 @@ class DoubaoOnline:
         }
         res = logged_request("ai", requests.post, "POST", self.endpoint, json=Payload, timeout=DOUBAO_REQUEST_TIMEOUT)
         res.raise_for_status()
+        if not res.text.strip():
+            raise ValueError("AI 返回内容为空，本轮处理失败。")
         return res.text

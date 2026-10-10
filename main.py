@@ -53,7 +53,7 @@ def run_scheduled_job(name: str, job, *, log_success: bool = False):
 
 
 def _run_scheduled_job(name: str, job, *, log_success: bool = False):
-    """记录任务边界；失败后继续抛出，让 systemd 按既有策略重启。"""
+    """记录任务边界；失败后返回，让调度器在下一轮继续执行。"""
     started_at = time.monotonic()
     log_event("runtime", "job_started")
     if log_success:
@@ -68,7 +68,7 @@ def _run_scheduled_job(name: str, job, *, log_success: bool = False):
             file=sys.stderr,
             flush=True,
         )
-        raise
+        return None
 
     completed_at = datetime.now().astimezone().isoformat(timespec="seconds")
     SCHEDULED_JOB_LAST_SUCCESS[name] = completed_at
