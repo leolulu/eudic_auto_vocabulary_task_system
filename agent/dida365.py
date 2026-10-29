@@ -42,6 +42,7 @@ class Dida365Agent:
         tags: list | None = None,
         parent_id: str | None = None,
         note_image_files: list[tuple[str, io.BytesIO]] | None = None,
+        resume_existing: bool = False,
     ):
         note_image_files = note_image_files or []
         note_image_names = [filename.lower() for filename, _ in note_image_files]
@@ -52,15 +53,22 @@ class Dida365Agent:
             if len(existing_tasks) != 1:
                 raise UserWarning(f"Task with title[{title}] duplicated, count: {len(existing_tasks)}")
             task = existing_tasks[0]
-            if note_image_names and self._note_images_are_complete(task, note_image_names):
-                return task
-            if EUDIC_NOTE_IMAGES_PLACEHOLDER not in (task.content or ""):
+            if (
+                not resume_existing
+                and EUDIC_NOTE_IMAGES_PLACEHOLDER not in (task.content or "")
+                and not (note_image_names and self._note_images_are_complete(task, note_image_names))
+            ):
                 raise UserWarning(f"Task with title[{title}] already exists and cannot be resumed")
-            print(f"发现未完成的欧路笔记图片任务 [{title}]，继续同步。")
-        else:
+            if resume_existing and task.project_id != project_id:
+                raise UserWarning(f"Task with title[{title}] belongs to another project")
+            print(f"发现尚未完成同步的单词任务 [{title}]，继续本次同步。")
+
+        # 所需媒体准备成功后才创建任务；正常无视频由查询入口返回空列表。
+        media_files = self._get_task_attachments_bytes(title)
+        if not existing_tasks:
             template_task = self.find_task("模板任务一")
             template_task.change_start_date_to_today()
-            new_task_dict = template_task.task_dict
+            new_task_dict = dict(template_task.task_dict)
             new_task_dict[Task.PROJECT_ID] = project_id
             new_task_dict[Task.TITLE] = title
             new_task_dict[Task.CONTENT] = content
@@ -69,14 +77,29 @@ class Dida365Agent:
                 new_task_dict[Task.TAGS] = tags
             if parent_id:
                 new_task_dict[Task.PARENT_ID] = parent_id
-            self.dida.post_task(Task.gen_add_data_payload(new_task_dict))
-            task = self.find_task(title, if_reload_data=True)
+            try:
+                self.dida.post_task(Task.gen_add_data_payload(new_task_dict))
+            except requests.RequestException:
+                # 超时可能已在服务端创建成功，先读回，不能直接再创建一个。
+                task = self.find_task(title, if_reload_data=True)
+                if task.project_id != project_id:
+                    raise
 
-        self._gen_dictvoice_and_upload_to_task_and_rearrange_content(
-            task,
-            note_image_files=note_image_files,
-        )
-        return self.find_task(title, if_reload_data=True)
+        for attempt in range(3):
+            task = self.find_task(title, if_reload_data=True)
+            try:
+                self._gen_dictvoice_and_upload_to_task_and_rearrange_content(
+                    task,
+                    note_image_files=note_image_files,
+                    media_files=media_files,
+                )
+                return self.find_task(title, if_reload_data=True)
+            except (requests.RequestException, RuntimeError) as error:
+                log_event("dida", "word_attachments_failed", level=logging.ERROR, error=error,
+                          word=title, task_id=task.id, attempt=attempt + 1, max_attempts=3)
+                if attempt == 2:
+                    raise
+                sleep(2 ** attempt)
 
     @staticmethod
     def _note_images_are_complete(task: Task, note_image_names: list[str]) -> bool:
@@ -121,19 +144,36 @@ class Dida365Agent:
         ]
 
         def rearrange_content(task, leading_file_strings, note_image_file_strings):
-            new_content = re.sub(uploadAttachment.FILE_PATTERN, "", task.content).strip()
+            images_already_placed = note_image_names and self._note_images_are_complete(task, note_image_names)
+            new_content = re.sub(
+                uploadAttachment.FILE_PATTERN,
+                lambda match: match.group(0) if images_already_placed and match.group(0) in note_image_file_strings else "",
+                task.content,
+            ).strip()
             if note_image_names:
-                if EUDIC_NOTE_IMAGES_PLACEHOLDER not in new_content:
+                if EUDIC_NOTE_IMAGES_PLACEHOLDER not in new_content and not images_already_placed:
                     raise RuntimeError("任务正文缺少欧路笔记图片占位符")
                 new_content = new_content.replace(
                     EUDIC_NOTE_IMAGES_PLACEHOLDER,
-                    "\n".join(note_image_file_strings),
+                    "" if images_already_placed else "\n".join(note_image_file_strings),
                     1,
                 )
             if leading_file_strings:
                 new_content = "\n".join(leading_file_strings + ["", new_content])
             task.update_content(new_content)
-            self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
+            try:
+                self.dida.post_task(Task.gen_update_data_payload(task.task_dict))
+            except requests.RequestException:
+                confirmed = self.find_task(title, if_reload_data=True)
+                if confirmed.content != new_content:
+                    raise
+            for attempt in range(3):
+                confirmed = self.find_task(title, if_reload_data=True)
+                if confirmed.content == new_content:
+                    return
+                if attempt < 2:
+                    sleep(2)
+            raise RuntimeError(f"任务 [{title}] 正文和附件引用尚未确认同步成功")
 
         print("Begin to rearrange content to put dictvoice ahead.")
         task = None
@@ -149,7 +189,7 @@ class Dida365Agent:
                     for name in expected_attachment_names
                 )
             else:
-                attachments_ready = bool(task.attachments)
+                attachments_ready = True
             if attachments_ready:
                 break
             if attempt < 2:
@@ -189,7 +229,9 @@ class Dida365Agent:
                 print(f"Error occurred when rearranging content: {e}")
                 raise
         else:
-            print("Can't find attachments, content not rearranged.")
+            if not task.content or not task.content.strip():
+                raise RuntimeError(f"任务 [{title}] 正文为空，尚未完成同步")
+            log_event("dida", "word_without_media_confirmed", word=title, task_id=task.id)
 
     def update_task(self, task_dict):
         self.dida.post_task(Task.gen_update_data_payload(task_dict))
@@ -233,7 +275,7 @@ class Dida365Agent:
     def _get_task_attachments_bytes(self, word: str) -> list[tuple]:
         """获取任务附件的字节数据（语音和视频）"""
 
-        def download_video(url: str) -> tuple[str, io.BytesIO] | None:
+        def download_video(url: str) -> tuple[str, io.BytesIO]:
             """下载视频并返回文件名和字节流"""
             max_retries = 3
             for attempt in range(max_retries):
@@ -241,6 +283,8 @@ class Dida365Agent:
                     headers = {"User-Agent": HEADER_CHROME_UA}
                     response = logged_request("media", requests.get, "GET", url, log_response_body=False, headers=headers, timeout=MEDIA_DOWNLOAD_TIMEOUT)
                     response.raise_for_status()
+                    if len(response.content) < 12 or response.content[4:8] != b"ftyp":
+                        raise ValueError("视频响应为空或不是有效 MP4 文件")
 
                     # 从URL提取文件名
                     filename = url.split("/")[-1]
@@ -248,7 +292,7 @@ class Dida365Agent:
                         filename += ".mp4"
 
                     return (filename, io.BytesIO(response.content))
-                except Exception as e:
+                except (requests.RequestException, ValueError) as e:
                     log_event("media", "video_download_failed", level=logging.ERROR, error=e,
                               word=word, url=safe_url(url), attempt=attempt + 1,
                               max_attempts=max_retries, retry_delay_seconds=2**attempt if attempt < max_retries - 1 else None)
@@ -256,20 +300,10 @@ class Dida365Agent:
                     if attempt < max_retries - 1:  # 不是最后一次尝试
                         sleep(2**attempt)  # 指数退避
                     else:
-                        return None
+                        raise
 
-        result = []
-
-        # 添加语音文件
-        try:
-            voice_files = get_dictvoice_bytes(word)
-        except requests.RequestException as error:
-            log_event("media", "voice_download_skipped", level=logging.ERROR, error=error, word=word)
-            # 部分罕见词会被词典语音接口以 5xx 拒绝；语音属于可选增强，
-            # 不能因此阻断欧路 Note 图片等其他附件。
-            print(f"警告: 单词 '{word}' 的发音音频下载失败，将继续处理其他附件：{error}")
-        else:
-            result.extend(voice_files)
+        # 发音异常必须向上传递；两源明确无资源返回空列表，是正常处理结果。
+        result = get_dictvoice_bytes(word)
 
         # 添加视频文件
         video_urls = query_word_explanation_video(word)
@@ -288,20 +322,31 @@ class Dida365Agent:
         self,
         task: Task,
         note_image_files: list[tuple[str, io.BytesIO]] | None = None,
+        media_files: list[tuple[str, io.BytesIO]] | None = None,
     ):
         # 欧路图片与既有语音/视频走同一个滴答附件接口；按文件名跳过已上传项，
         # 使“附件成功、正文更新失败”的任务可以在下一轮安全接续。
         note_image_files = note_image_files or []
-        file_bytes_objs = [*note_image_files, *self._get_task_attachments_bytes(task.title)]
+        if media_files is None:
+            media_files = self._get_task_attachments_bytes(task.title)
+        file_bytes_objs = [*note_image_files, *media_files]
         existing_names = {attachment.file_name.lower() for attachment in task.attachments}
         missing_files = [
             file_bytes_obj
             for file_bytes_obj in file_bytes_objs
             if file_bytes_obj[0].lower() not in existing_names
         ]
+        task.attachments_to_upload.clear()
         task.add_upload_attachment_post_payload_by_bytes(*missing_files)
         if task.attachments_to_upload:
-            self.dida.upload_attachment(*task.attachments_to_upload)
+            try:
+                self.dida.upload_attachment(*task.attachments_to_upload)
+            except requests.RequestException:
+                confirmed = self.find_task(task.title, if_reload_data=True)
+                confirmed_names = {attachment.file_name.lower() for attachment in confirmed.attachments}
+                if any(name.lower() not in confirmed_names for name, _ in file_bytes_objs):
+                    raise
+                log_event("dida", "attachment_upload_confirmed_after_error", word=task.title, task_id=task.id)
         self.rearrange_content_put_dictvoice_ahead(
             task.title,
             note_image_names=[filename for filename, _ in note_image_files],

@@ -2,6 +2,7 @@ import io
 import json
 import sys
 import unittest
+from pathlib import Path
 from copy import deepcopy
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -155,19 +156,20 @@ class ExternalRequestTimeoutTest(unittest.TestCase):
 
     def test_dictvoice_request_uses_the_audio_timeout(self):
         response = Mock()
-        response.content = b"audio"
+        response.content = (Path(__file__).parent / "fixtures/pronunciation.mp3").read_bytes()
+        response.headers = {"Content-Type": "audio/mpeg"}
 
         with patch(
             "dida365_project.utils.dictvoice_util.requests.get",
             return_value=response,
         ) as request_get:
-            self.assertEqual(request_dictvoice(0, "hello"), b"audio")
+            self.assertEqual(request_dictvoice(0, "hello"), response.content)
 
         self.assertEqual(request_get.call_args.kwargs["timeout"], DICTVOICE_REQUEST_TIMEOUT)
 
     def test_video_download_uses_the_media_timeout(self):
         response = Mock()
-        response.content = b"video"
+        response.content = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
         agent = Dida365Agent(Mock())
 
         with (
@@ -183,7 +185,7 @@ class ExternalRequestTimeoutTest(unittest.TestCase):
         self.assertEqual(files[0][0], "video.mp4")
         self.assertEqual(request_get.call_args.kwargs["timeout"], MEDIA_DOWNLOAD_TIMEOUT)
 
-    def test_voice_failure_does_not_block_other_attachments(self):
+    def test_voice_failure_keeps_the_word_incomplete(self):
         agent = Dida365Agent(Mock())
 
         with (
@@ -191,9 +193,11 @@ class ExternalRequestTimeoutTest(unittest.TestCase):
                 "agent.dida365.get_dictvoice_bytes",
                 side_effect=requests.HTTPError("voice unavailable"),
             ),
-            patch("agent.dida365.query_word_explanation_video", return_value=[]),
+            patch("agent.dida365.query_word_explanation_video", return_value=[]) as video,
         ):
-            self.assertEqual(agent._get_task_attachments_bytes("rare-word"), [])
+            with self.assertRaises(requests.HTTPError):
+                agent._get_task_attachments_bytes("rare-word")
+        video.assert_not_called()
 
 
 class ScheduledJobLoggingTest(unittest.TestCase):

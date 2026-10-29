@@ -146,12 +146,12 @@ class BaiduVideoQueryTest(unittest.TestCase):
             if url == ENDPOINT:
                 return response(video_result())
             self.assertEqual(url, VIDEO_URL)
-            return response(b"video", content_type="video/mp4")
+            return response(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom", content_type="video/mp4")
         dida = Mock()
         with patch("utils.baidu_video_client.requests.get", side_effect=send), patch("agent.dida365.get_dictvoice_bytes", return_value=[("us.mp3", audio)]):
             files = Dida365Agent(dida)._get_task_attachments_bytes("evidence")
         self.assertEqual([filename for filename, _ in files], ["us.mp3", "video.mp4"])
-        self.assertEqual(files[1][1].getvalue(), b"video")
+        self.assertEqual(files[1][1].getvalue()[4:8], b"ftyp")
         self.assertEqual(calls[1][1]["timeout"], MEDIA_DOWNLOAD_TIMEOUT)
         self.assertNotIn("Authorization", calls[0][1]["headers"])
         self.assertNotIn("Authorization", calls[1][1]["headers"])

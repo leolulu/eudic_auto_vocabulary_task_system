@@ -440,10 +440,12 @@ class Bearer:
         if words:
             log_event("runtime", "words_detected", count=len(words), words=[word.word for word in words])
             print(f"添加单词本生词:{words}", flush=True)
+        failed = False
         for word in words:
             try:
                 note_image_files = self.agent.eudic.download_note_images(word.note_images)
             except EudicNoteImageDownloadError as error:
+                failed = True
                 log_event("eudic", "image_download_skipped", level=logging.ERROR, error=error, word=word.word)
                 print(f"{error}，本轮跳过，下一轮继续重试。", flush=True)
                 continue
@@ -462,21 +464,25 @@ class Bearer:
                     word.word,
                     content,
                     note_image_files=note_image_files,
+                    resume_existing=True,
                 )
-            except BaseException as error:
+            except Exception as error:
+                failed = True
                 log_event("dida", "word_sync_failed", level=logging.ERROR, error=error, word=word.word)
                 traceback.print_exc()
             else:
                 sync_succeeded = True
-                log_event("dida", "word_sync_completed", word=word.word)
-            # 图片任务只有在附件和正文引用都校验完成后才能进入历史；无图任务保留
-            # 旧行为，以免发音或视频附件的既有容错语义发生无关变化。
-            if sync_succeeded or not note_image_files:
+            # 历史记录是唯一成功标记，正文和所有需要的附件确认完成后才写入。
+            if sync_succeeded:
                 try:
                     self.agent.dida.find_task(word.word, if_reload_data=True)
                     add_word_to_his_set(word.word)
-                except BaseException as error:
+                    log_event("dida", "word_sync_completed", word=word.word)
+                except Exception as error:
+                    failed = True
                     log_event("runtime", "word_history_update_failed", level=logging.ERROR, error=error, word=word.word)
+        if failed:
+            raise RuntimeError("本轮有单词未完整同步，未写入成功历史，下轮继续重试")
 
     def bear_eudic_to_anki(self):
         words = self.acquire_words(7)

@@ -202,6 +202,7 @@ class DidaNoteImagePlacementTest(unittest.TestCase):
         agent.find_task = Mock(return_value=task)
         agent._gen_dictvoice_and_upload_to_task_and_rearrange_content = Mock()
         image_files = [("eudic-note-01-image.jpg", io.BytesIO(b"image"))]
+        agent._get_task_attachments_bytes = Mock(return_value=[])
 
         result = agent.add_task("hello", "new generated content", note_image_files=image_files)
 
@@ -210,9 +211,10 @@ class DidaNoteImagePlacementTest(unittest.TestCase):
         agent._gen_dictvoice_and_upload_to_task_and_rearrange_content.assert_called_once_with(
             task,
             note_image_files=image_files,
+            media_files=[],
         )
 
-    def test_add_task_accepts_a_fully_verified_previous_attempt(self):
+    def test_existing_note_images_do_not_skip_the_required_media(self):
         image = SimpleNamespace(
             file_name="eudic-note-01-image.jpg",
             content_file_string="![image](image/eudic-note-01-image.jpg)",
@@ -222,6 +224,7 @@ class DidaNoteImagePlacementTest(unittest.TestCase):
         dida.active_tasks = [task]
         agent = Dida365Agent(dida)
         agent._gen_dictvoice_and_upload_to_task_and_rearrange_content = Mock()
+        agent._get_task_attachments_bytes = Mock(return_value=[("us.mp3", io.BytesIO(b"audio"))])
 
         result = agent.add_task(
             "hello",
@@ -231,7 +234,8 @@ class DidaNoteImagePlacementTest(unittest.TestCase):
 
         self.assertIs(result, task)
         dida.post_task.assert_not_called()
-        agent._gen_dictvoice_and_upload_to_task_and_rearrange_content.assert_not_called()
+        agent._gen_dictvoice_and_upload_to_task_and_rearrange_content.assert_called_once()
+        agent._get_task_attachments_bytes.assert_called_once_with("hello")
 
     def test_rearrange_places_note_images_at_context_and_audio_first(self):
         audio = SimpleNamespace(file_name="us.mp3", content_file_string="![file](audio/us.mp3)")
@@ -333,7 +337,8 @@ class NoteImageSyncFlowTest(unittest.TestCase):
         bearer.acquire_words = Mock(return_value=[word])
         bearer.get_doubao_explanation_by_doubao = Mock()
 
-        bearer.bear_eudic_to_dida365()
+        with self.assertRaisesRegex(RuntimeError, "未完整同步"):
+            bearer.bear_eudic_to_dida365()
 
         bearer.get_doubao_explanation_by_doubao.assert_not_called()
         dida.add_task.assert_not_called()
@@ -358,7 +363,8 @@ class NoteImageSyncFlowTest(unittest.TestCase):
             patch("main.traceback.print_exc"),
         ):
             config_manager.return_value.get_config.return_value = "http://example.test"
-            bearer.bear_eudic_to_dida365()
+            with self.assertRaisesRegex(RuntimeError, "未完整同步"):
+                bearer.bear_eudic_to_dida365()
 
         add_to_history.assert_not_called()
 
