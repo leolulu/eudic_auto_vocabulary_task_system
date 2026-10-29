@@ -16,7 +16,7 @@ from dida365_project.models.task import Task
 from dida365_project.models.upload_attachment import uploadAttachment
 from dida365_project.utils.dictvoice_util import get_dictvoice_bytes
 from dida365_project.utils.time_util import get_days_offset, get_today_arrow
-from utils.phonetic_util import query_word_explanation_video
+from utils.baidu_video_client import query_word_explanation_video
 
 
 MEDIA_DOWNLOAD_TIMEOUT = (5, 60)

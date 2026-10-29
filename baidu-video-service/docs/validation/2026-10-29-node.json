@@ -1,0 +1,251 @@
+{
+  "ok": true,
+  "capturedAt": "2026-10-29T01:34:16.466Z",
+  "runtime": "node-22.18.0",
+  "target": "local production handler with real Baidu requests",
+  "cases": [
+    {
+      "name": "health",
+      "status": 200,
+      "elapsedMs": 47,
+      "body": {
+        "ok": true,
+        "service": "baidu-word-video",
+        "version": "1.0.0",
+        "configured": true,
+        "requestId": "525e57b4-161b-4c5c-908c-9246c2a95957"
+      }
+    },
+    {
+      "name": "unauthorized",
+      "status": 401,
+      "elapsedMs": 2,
+      "body": {
+        "ok": false,
+        "word": null,
+        "hasVideo": false,
+        "video": null,
+        "failure": "UNAUTHORIZED",
+        "errno": null,
+        "errmsg": "A valid Bearer API key is required",
+        "requestId": "1f9ea13c-0f25-4855-9dbb-677a04d3a3d7"
+      }
+    },
+    {
+      "name": "missing-word",
+      "status": 400,
+      "elapsedMs": 1,
+      "body": {
+        "ok": false,
+        "word": null,
+        "hasVideo": false,
+        "video": null,
+        "failure": "INVALID_WORD",
+        "errno": null,
+        "errmsg": "Provide exactly one word parameter",
+        "requestId": "2205ca28-6ad6-442e-910f-a1b7b358ad49"
+      }
+    },
+    {
+      "name": "wrong-method",
+      "status": 405,
+      "elapsedMs": 1,
+      "body": {
+        "ok": false,
+        "word": null,
+        "hasVideo": false,
+        "video": null,
+        "failure": "METHOD_NOT_ALLOWED",
+        "errno": null,
+        "errmsg": "Use GET for this endpoint",
+        "requestId": "70125511-83d9-426e-9e7e-ee8baee979e8"
+      }
+    },
+    {
+      "name": "evidence",
+      "status": 200,
+      "elapsedMs": 796,
+      "body": {
+        "ok": true,
+        "word": "evidence",
+        "hasVideo": true,
+        "video": {
+          "videoUrl": "https://fanyiapp.cdn.bcebos.com/app/video/query/E204-evidence.mp4",
+          "coverUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/472309f790529822820933acd8ca7bcb0a46d4a3.jpg",
+          "thumbUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/9d82d158ccbf6c81dc742687b33eb13533fa4019.jpg",
+          "feedUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/738b4710b912c8fc6b93d1caf3039245d6882150.jpg",
+          "videoTime": 77,
+          "videoType": null,
+          "tag": "讲解"
+        },
+        "cache": "miss",
+        "failure": null,
+        "errno": null,
+        "errmsg": null,
+        "requestId": "1390aae1-285b-4439-b6aa-7bef2727bc38"
+      }
+    },
+    {
+      "name": "same-word-concurrent",
+      "status": 200,
+      "elapsedMs": 792,
+      "body": {
+        "ok": true,
+        "word": "evidence",
+        "hasVideo": true,
+        "video": {
+          "videoUrl": "https://fanyiapp.cdn.bcebos.com/app/video/query/E204-evidence.mp4",
+          "coverUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/472309f790529822820933acd8ca7bcb0a46d4a3.jpg",
+          "thumbUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/9d82d158ccbf6c81dc742687b33eb13533fa4019.jpg",
+          "feedUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/738b4710b912c8fc6b93d1caf3039245d6882150.jpg",
+          "videoTime": 77,
+          "videoType": null,
+          "tag": "讲解"
+        },
+        "cache": "coalesced",
+        "failure": null,
+        "errno": null,
+        "errmsg": null,
+        "requestId": "57b76978-703a-41e3-8416-28da7a3c42c0"
+      }
+    },
+    {
+      "name": "feature",
+      "status": 200,
+      "elapsedMs": 795,
+      "body": {
+        "ok": true,
+        "word": "feature",
+        "hasVideo": true,
+        "video": {
+          "videoUrl": "https://fanyiapp.cdn.bcebos.com/course/file/d62f9b94854b60bdc9ef5cb786b45abf/25a1988e77a17b4d2bc46fd7b05d617f.mp4",
+          "coverUrl": "https://fanyiapp.cdn.bcebos.com/course/file/d62f9b94854b60bdc9ef5cb786b45abf/25a1988e77a17b4d2bc46fd7b05d617f.-00001000.jpg",
+          "thumbUrl": "https://fanyiapp.cdn.bcebos.com/course/file/d62f9b94854b60bdc9ef5cb786b45abf/905fb9ea96b731d301dec959e9abca20.png",
+          "feedUrl": "https://fanyiapp.cdn.bcebos.com/course/file/d62f9b94854b60bdc9ef5cb786b45abf/25a1988e77a17b4d2bc46fd7b05d617f.-00001000.jpg",
+          "videoTime": 62,
+          "videoType": null,
+          "tag": "讲解"
+        },
+        "cache": "miss",
+        "failure": null,
+        "errno": null,
+        "errmsg": null,
+        "requestId": "441e9fff-141c-40fb-a452-0a2195a076e1"
+      }
+    },
+    {
+      "name": "apricot",
+      "status": 200,
+      "elapsedMs": 995,
+      "body": {
+        "ok": true,
+        "word": "apricot",
+        "hasVideo": false,
+        "video": null,
+        "cache": "miss",
+        "failure": null,
+        "errno": null,
+        "errmsg": null,
+        "requestId": "f26d9404-0eab-4965-81a5-369d60840401"
+      }
+    },
+    {
+      "name": "cache-hit",
+      "status": 200,
+      "elapsedMs": 1,
+      "body": {
+        "ok": true,
+        "word": "evidence",
+        "hasVideo": true,
+        "video": {
+          "videoUrl": "https://fanyiapp.cdn.bcebos.com/app/video/query/E204-evidence.mp4",
+          "coverUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/472309f790529822820933acd8ca7bcb0a46d4a3.jpg",
+          "thumbUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/9d82d158ccbf6c81dc742687b33eb13533fa4019.jpg",
+          "feedUrl": "https://fanyiapp.cdn.bcebos.com/cms/oldimage/738b4710b912c8fc6b93d1caf3039245d6882150.jpg",
+          "videoTime": 77,
+          "videoType": null,
+          "tag": "讲解"
+        },
+        "cache": "hit",
+        "failure": null,
+        "errno": null,
+        "errmsg": null,
+        "requestId": "836284ca-8dff-4bce-9e47-ca94226ea1ad"
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "baidu_word_video",
+      "requestId": "525e57b4-161b-4c5c-908c-9246c2a95957",
+      "status": 200,
+      "failure": null,
+      "cache": null,
+      "elapsedMs": 2
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "1f9ea13c-0f25-4855-9dbb-677a04d3a3d7",
+      "status": 401,
+      "failure": "UNAUTHORIZED",
+      "cache": null,
+      "elapsedMs": 1
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "2205ca28-6ad6-442e-910f-a1b7b358ad49",
+      "status": 400,
+      "failure": "INVALID_WORD",
+      "cache": null,
+      "elapsedMs": 0
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "70125511-83d9-426e-9e7e-ee8baee979e8",
+      "status": 405,
+      "failure": "METHOD_NOT_ALLOWED",
+      "cache": null,
+      "elapsedMs": 0
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "1390aae1-285b-4439-b6aa-7bef2727bc38",
+      "status": 200,
+      "failure": null,
+      "cache": "miss",
+      "elapsedMs": 793
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "57b76978-703a-41e3-8416-28da7a3c42c0",
+      "status": 200,
+      "failure": null,
+      "cache": "coalesced",
+      "elapsedMs": 791
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "441e9fff-141c-40fb-a452-0a2195a076e1",
+      "status": 200,
+      "failure": null,
+      "cache": "miss",
+      "elapsedMs": 795
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "f26d9404-0eab-4965-81a5-369d60840401",
+      "status": 200,
+      "failure": null,
+      "cache": "miss",
+      "elapsedMs": 994
+    },
+    {
+      "event": "baidu_word_video",
+      "requestId": "836284ca-8dff-4bce-9e47-ca94226ea1ad",
+      "status": 200,
+      "failure": null,
+      "cache": "hit",
+      "elapsedMs": 0
+    }
+  ]
+}

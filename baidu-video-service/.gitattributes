@@ -1,0 +1,5 @@
+# Preserve the byte checksum of the frozen signing-script module on Windows.
+src/baidu/vendor-sdk.mjs text eol=lf
+
+# SSE events require a terminating blank line.
+test/fixtures/*.sse whitespace=-blank-at-eof

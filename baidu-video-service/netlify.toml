@@ -1,0 +1,10 @@
+[build]
+  command = "pnpm run build"
+  publish = "public"
+  edge_functions = "netlify/edge-functions"
+
+[build.environment]
+  NODE_VERSION = "22.18.0"
+  PNPM_FLAGS = "--frozen-lockfile"
+
+# Runtime secrets belong in the Netlify UI (Functions scope), not this file.

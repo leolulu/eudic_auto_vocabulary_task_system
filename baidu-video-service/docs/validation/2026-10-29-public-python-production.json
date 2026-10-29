@@ -1,0 +1,40 @@
+{
+  "startedAt": "2026-10-29T12:20:59+0800",
+  "local": false,
+  "authentication": "none",
+  "checks": [
+    {
+      "name": "health",
+      "status": 200,
+      "cors": "*",
+      "version": "1.1.0"
+    },
+    {
+      "name": "evidence",
+      "urls": [
+        "https://fanyiapp.cdn.bcebos.com/app/video/query/E204-evidence.mp4"
+      ],
+      "elapsedMs": 651
+    },
+    {
+      "name": "feature",
+      "urls": [
+        "https://fanyiapp.cdn.bcebos.com/course/file/d62f9b94854b60bdc9ef5cb786b45abf/25a1988e77a17b4d2bc46fd7b05d617f.mp4"
+      ],
+      "elapsedMs": 633
+    },
+    {
+      "name": "apricot",
+      "urls": [],
+      "elapsedMs": 624
+    },
+    {
+      "name": "video-cdn-range",
+      "status": 206,
+      "bytesRead": 1024,
+      "mp4Header": true
+    }
+  ],
+  "endpoint": "https://baidu-word-video-service-c7e3.netlify.app/v1/video",
+  "ok": true
+}

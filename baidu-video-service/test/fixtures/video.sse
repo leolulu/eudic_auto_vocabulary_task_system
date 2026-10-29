@@ -1,0 +1,8 @@
+data: {"errno":0,"data":{"event":"StartTranslation"}}
+
+data: {"errno":0,"data":{"event":"GetQueryExplainSucceed","queryExplain":{"videoUrl":"https://fanyiapp.cdn.bcebos.com/app/video/query/E204-evidence.mp4","videoTime":77,"tag":"讲解"}}}
+
+data: {"errno":0,"data":{"event":"TranslationSucceed"}}
+
+data: {"errno":0,"data":{"event":"Finished"}}
+

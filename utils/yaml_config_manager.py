@@ -4,6 +4,7 @@ import yaml
 
 from constants.yaml import (
     ANKI_PUSH_ENDPOINT,
+    BAIDU_VIDEO_SERVICE_URL,
     CONFIG_FILE_NAME,
     DIDA365_PASSWORD,
     DIDA365_USERNAME,
@@ -25,6 +26,7 @@ class YamlConfigManager:
     OPTIONAL_CONFIG = {
         EUDIC_SYNC_TOKEN: "",
         EUDIC_SYNC_USER_ID: "",
+        BAIDU_VIDEO_SERVICE_URL: "",
     }
     DEFAULT_CONFIG = {**ESSENTIAL_CONFIG, **OPTIONAL_CONFIG}
 

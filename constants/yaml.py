@@ -12,3 +12,5 @@ DIDA365_USERNAME = "dida365_username"
 DIDA365_PASSWORD = "dida365_password"
 
 ANKI_PUSH_ENDPOINT = "anki_push_endpoint"
+
+BAIDU_VIDEO_SERVICE_URL = "baidu_video_service_url"

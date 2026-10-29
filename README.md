@@ -20,7 +20,7 @@
 
 - 本机通过 [uv](https://docs.astral.sh/uv/) 管理 Python 与依赖（无需全局 Python）。
 - 依赖见 `requirements.txt`（requests、schedule、arrow、PyYAML、playwright 等）。
-- 百度讲解视频优先通过 `vendor/baidu-video.mjs` 查询，需要 Node.js ≥ 18；Node 不可用或查询失败时回退到 Playwright（Chromium）。百度音标仍可能使用 Playwright，首次使用需安装浏览器内核：`uv run playwright install chromium`。
+- 百度讲解视频通过独立 HTTP 服务查询，本地查询入口为 `utils/baidu_video_client.py`，无需本地 Node 或视频浏览器回退。服务源码位于 [baidu-video-service](baidu-video-service/README.md)。百度音标仍可能使用 Playwright，首次使用需安装浏览器内核：`uv run playwright install chromium`。
 
 ## 日志与排错
 
@@ -33,7 +33,7 @@
 | `dida.log` | 滴答登录/会话校验、任务/评论/附件请求、连接重试、登录冷却 |
 | `eudic.log` | 欧路开放 API、图片下载、桌面 App 私有同步请求和业务错误 |
 | `anki.log` | Anki 服务请求与同步错误 |
-| `media.log` | 发音/视频下载、HTTP 音标请求、浏览器音标失败、视频查询回退 |
+| `media.log` | 发音/视频下载、HTTP 音标请求、浏览器音标失败、视频服务查询及失败 |
 | `http.log` | 备用通用会话客户端的 HTTP 请求 |
 | `errors.log` | 各分类的 ERROR 记录汇总，包含 HTTP 4xx/5xx、已识别的业务错误、异常堆栈 |
 
@@ -56,8 +56,24 @@
 | `doubao_webserver_endpoint` | 自建豆包讲解服务地址 |
 | `dida365_username` / `dida365_password` | 滴答清单账号密码 |
 | `anki_push_endpoint` | Anki 推送后端地址（用到 Anki 流时才需要） |
+| `baidu_video_service_url` | 百度讲解视频服务地址，可填完整 `/v1/video` 地址或服务 origin |
 
 新生成的模板会包含两个空白的欧路私有同步配置项；它们不参与常规启动的必填校验。已有用户的旧配置不会被自动补写，也不会因为缺少这两项而停止运行。
+
+视频服务是公开、无需鉴权的接口，配置服务地址即可，也可通过进程环境变量 `BAIDU_VIDEO_SERVICE_URL` 覆盖。当前正式地址为 `https://baidu-word-video-service-c7e3.netlify.app/v1/video`。远端服务必须使用 HTTPS，本地联调允许回环 HTTP 地址。HTTP 查询使用 5 秒连接超时和 35 秒读取超时，不跟随重定向；正常无视频返回空列表，网络、业务和格式错误抛出异常，交给现有调度失败处理，不在本地重新向百度生成签名或启动视频浏览器。先前添加的密钥配置已移除。
+
+旧 Node CLI 已退出业务代码；原件保留在 Git 提交 `277444abbfd5266e9d4c32c31bdb65368ace2dc9` 的 `vendor/baidu-video.mjs` 中。旧 POC 及临时调研目录已在最终整理时移除，正式服务携带独立的百度签名脚本源码，构建不依赖历史输入。
+
+只读联调命令（不会创建欧路或滴答记录）：
+
+```powershell
+$env:PYTHONUTF8 = '1'
+uv run --python .venv/Scripts/python.exe test/manual_baidu_video_service.py
+# 无需线上地址，临时运行独立服务测试 Python -> HTTP -> 百度 -> CDN：
+uv run --python .venv/Scripts/python.exe test/manual_baidu_video_service.py --local
+```
+
+增加 `--download` 可通过原附件流程完整下载 `evidence` 视频到内存，仍不上传滴答；默认只读取 CDN 的前 1024 字节验证 MP4。联调报告默认写到项目 `.cache/baidu-video-integration.json`。
 
 滴答清单登录成功后返回的 `t` Cookie 会保存在项目根目录的 `dida365.session` 中。该文件和登录冷却状态文件均已被 Git 忽略；不要手工提交、打印或分享其中内容。欧路私有同步凭据同样应按密码级凭据保管。
 

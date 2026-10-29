@@ -1,0 +1,65 @@
+{
+  "verifiedOn": "2026-10-29",
+  "ok": true,
+  "source": "Recorded console output from pnpm run smoke:local",
+  "target": "temporary localhost HTTP server",
+  "ephemeralKeyPersisted": false,
+  "serverStopped": true,
+  "cases": [
+    {
+      "name": "health",
+      "status": 200,
+      "elapsedMs": 100
+    },
+    {
+      "name": "unauthorized",
+      "status": 401,
+      "elapsedMs": 9
+    },
+    {
+      "name": "missing-word",
+      "status": 400,
+      "elapsedMs": 6
+    },
+    {
+      "name": "wrong-method",
+      "status": 405,
+      "elapsedMs": 5
+    },
+    {
+      "name": "apricot",
+      "status": 200,
+      "elapsedMs": 1238,
+      "hasVideo": false,
+      "cache": "miss"
+    },
+    {
+      "name": "evidence",
+      "status": 200,
+      "elapsedMs": 1251,
+      "hasVideo": true,
+      "cache": "miss"
+    },
+    {
+      "name": "same-word-concurrent",
+      "status": 200,
+      "elapsedMs": 1251,
+      "hasVideo": true,
+      "cache": "coalesced"
+    },
+    {
+      "name": "feature",
+      "status": 200,
+      "elapsedMs": 1258,
+      "hasVideo": true,
+      "cache": "miss"
+    },
+    {
+      "name": "cache-hit",
+      "status": 200,
+      "elapsedMs": 7,
+      "hasVideo": true,
+      "cache": "hit"
+    }
+  ]
+}

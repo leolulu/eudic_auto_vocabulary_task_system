@@ -1,0 +1,20 @@
+{
+  "name": "baidu-word-video-service",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3",
+  "engines": { "node": ">=22.18.0 <23" },
+  "scripts": {
+    "test": "node --test",
+    "build": "pnpm test && node scripts/verify.mjs",
+    "check:edge": "node scripts/build-edge.mjs",
+    "dev": "node scripts/dev.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "smoke:runtime": "node scripts/smoke-runtime.mjs"
+  },
+  "devDependencies": {
+    "@netlify/edge-bundler": "16.1.3"
+  }
+}

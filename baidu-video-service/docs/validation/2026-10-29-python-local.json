@@ -1,0 +1,43 @@
+{
+  "startedAt": "2026-10-29T10:01:33+0800",
+  "local": true,
+  "checks": [
+    {
+      "name": "health",
+      "status": 200
+    },
+    {
+      "name": "unauthorized",
+      "status": 401,
+      "requestId": "a0a6ca84-e4c5-47db-84db-a322526af0db"
+    },
+    {
+      "name": "evidence",
+      "urls": [
+        "https://fanyiapp.cdn.bcebos.com/app/video/query/E204-evidence.mp4"
+      ],
+      "elapsedMs": 673
+    },
+    {
+      "name": "feature",
+      "urls": [
+        "https://fanyiapp.cdn.bcebos.com/course/file/d62f9b94854b60bdc9ef5cb786b45abf/25a1988e77a17b4d2bc46fd7b05d617f.mp4"
+      ],
+      "elapsedMs": 315
+    },
+    {
+      "name": "apricot",
+      "urls": [],
+      "elapsedMs": 328
+    },
+    {
+      "name": "video-cdn-range",
+      "status": 206,
+      "bytesRead": 1024,
+      "mp4Header": true
+    }
+  ],
+  "endpoint": "http://127.0.0.1:54694/v1/video",
+  "ok": true,
+  "localServerStopped": true
+}

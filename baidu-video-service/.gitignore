@@ -1,0 +1,20 @@
+# Project-local dependencies, tool caches and deploy bundles
+/node_modules/
+/.cache/
+/.netlify/
+/dist/
+/build/
+/coverage/
+
+# Local configuration; keep only the documented example
+.env
+.env.*
+!.env.example
+
+# Editor, test and operating-system temporary files
+*.log
+*.tmp
+*.temp
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

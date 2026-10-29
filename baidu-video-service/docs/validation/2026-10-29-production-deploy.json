@@ -1,0 +1,33 @@
+{
+  "capturedAt": "2026-10-29T02:12:29.991Z",
+  "siteId": "bc8085ef-8257-46a8-a572-28a79ffc6157",
+  "name": "baidu-word-video-service-c7e3",
+  "accountId": "6ae1f610970372c6b1629319",
+  "origin": "https://baidu-word-video-service-c7e3.netlify.app",
+  "endpoint": "https://baidu-word-video-service-c7e3.netlify.app/v1/video",
+  "deployId": "6ae2aabcab9097cc97d3b20f",
+  "state": "ready",
+  "context": "deploy-preview",
+  "publishedAt": "2026-10-29T02:11:00.614Z",
+  "ssoLogin": false,
+  "bundle": {
+    "bytes": 471065,
+    "sha256": "3b47ddde6a5527a3c3b2a609dbfffcfc6f227bc7ac9079987cfae5c0619225e5"
+  },
+  "environment": {
+    "key": "BAIDU_VIDEO_API_KEY",
+    "contexts": [
+      "all"
+    ],
+    "scopes": [
+      "builds",
+      "functions",
+      "post_processing",
+      "runtime"
+    ],
+    "isSecret": false,
+    "reason": "Free plan does not support granular scopes; is_secret with default post_processing scope was rejected. Ordinary server-side environment variable created without a plan upgrade."
+  },
+  "pocProtectionUnchanged": true,
+  "gitWrites": false
+}

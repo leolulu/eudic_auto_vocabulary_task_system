@@ -7,6 +7,14 @@ runtime_state.sqlite3-shm
 runtime_state.sqlite3-wal
 /logs/
 /.test-tmp/
+/.cleanup-review/
+
+# Project-local JavaScript tools and generated artifacts
+node_modules/
+.netlify/
+.ruff_cache/
+.env.*
+!.env.example
 
 ttt.py
 

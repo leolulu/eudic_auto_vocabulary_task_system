@@ -1,0 +1,24 @@
+{
+  "extractedAt": "2026-10-29T01:27:56.257Z",
+  "original": {
+    "file": "vendor/baidu-video.mjs (parent project, extraction source only)",
+    "bytes": 13431343,
+    "sha256": "e289cc21114f4e32f081b48c03f74a1aa36191de73520a129c3e723c9c638b2b"
+  },
+  "sdk": {
+    "ACS": {
+      "bytes": 226290,
+      "sha256": "637b511b96f05e6ec61e6cbc0a6872a2d002ec17e1fe6516aa7ee23c283ad69a"
+    },
+    "ABCLITE": {
+      "bytes": 191395,
+      "sha256": "f409b17902d723c0e6c7890f187d9308c1526eb9c6b8256a993e41976373f68d"
+    }
+  },
+  "files": {
+    "src/baidu/vendor-sdk.mjs": {
+      "bytes": 433825,
+      "sha256": "a3de4079f08fe01aa002ba41d62f5706ce580f32490f1f9ade6ea47d30139044"
+    }
+  }
+}

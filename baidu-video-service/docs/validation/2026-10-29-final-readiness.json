@@ -1,0 +1,38 @@
+{
+  "phase": "final source cleanup and commit preparation",
+  "date": "2026-10-29",
+  "runtimeChangesDuringCleanup": false,
+  "checks": {
+    "python": { "command": "uv run --python .venv/Scripts/python.exe -m unittest discover -s test -p test_*.py -q", "total": 174, "passed": 173, "skipped": 1, "exitCode": 0 },
+    "service": { "command": "pnpm run build", "tests": 28, "passed": 28, "sourceIntegrity": true, "runtimeModules": 12, "exitCode": 0 },
+    "edge": { "command": "pnpm run check:edge", "exitCode": 0, "bytes": 470195, "sha256": "b00f1a8340dba849b40ff47a5f06977e15b210aef7dbf6d20283c7e0c6e2c4c5", "matchesPublishedBundle": true },
+    "pocSourceRestoration": { "command": "pnpm restore-source", "bytes": 13431343, "sha256": "e289cc21114f4e32f081b48c03f74a1aa36191de73520a129c3e723c9c638b2b", "matchesArchivedInput": true, "repeatInvocationDoesNotOverwrite": true },
+    "research": { "primaryMeasurements": 90, "additionalDiagnostics": 6, "sourceHashesVerified": true },
+    "gitDiffCheck": true,
+    "currentDocumentationLinks": true
+  },
+  "online": {
+    "startedAt": "2026-10-29T13:38:44+0800",
+    "endpoint": "https://baidu-word-video-service-c7e3.netlify.app/v1/video",
+    "authentication": "none",
+    "healthStatus": 200,
+    "version": "1.1.0",
+    "cors": "*",
+    "queries": [
+      { "word": "evidence", "videoCount": 1, "elapsedMs": 1815 },
+      { "word": "feature", "videoCount": 1, "elapsedMs": 868 },
+      { "word": "apricot", "videoCount": 0, "elapsedMs": 797 }
+    ],
+    "cdn": { "status": 206, "bytesRead": 1024, "mp4Header": true }
+  },
+  "cleanup": {
+    "reviewDirectory": ".cleanup-review/2026-10-29-baidu-video",
+    "rawMaterialAndGeneratedFilesMoved": true,
+    "recursiveDeletionRejectedByPolicy": true,
+    "protectedConfigSessionDatabaseMetadataUnchanged": true,
+    "gitWrites": false,
+    "remoteDeploymentsDuringCleanup": false,
+    "eudicOrDidaWrites": false
+  },
+  "limits": ["No long-term load or regional reliability testing", "No independent cloud CPU or billing validation"]
+}

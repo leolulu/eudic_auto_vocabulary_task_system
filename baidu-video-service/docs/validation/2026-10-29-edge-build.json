@@ -1,0 +1,49 @@
+{
+  "verifiedOn": "2026-10-29",
+  "ok": true,
+  "tool": "@netlify/edge-bundler@16.1.3",
+  "localDeno": {
+    "version": "2.4.2",
+    "path": ".cache/deno-cli/deno.exe",
+    "source": "copied from already-verified project-local POC cache"
+  },
+  "bundle": {
+    "bytes": 471065,
+    "sha256": "3b47ddde6a5527a3c3b2a609dbfffcfc6f227bc7ac9079987cfae5c0619225e5"
+  },
+  "manifest": {
+    "bundles": [
+      {
+        "asset": "3b47ddde6a5527a3c3b2a609dbfffcfc6f227bc7ac9079987cfae5c0619225e5.eszip",
+        "format": "eszip2"
+      }
+    ],
+    "routes": [
+      {
+        "function": "api",
+        "pattern": "^/healthz/?$",
+        "excluded_patterns": [],
+        "path": "/healthz"
+      },
+      {
+        "function": "api",
+        "pattern": "^/v1(?:/(.*))/?$",
+        "excluded_patterns": [],
+        "path": "/v1/*"
+      }
+    ],
+    "post_cache_routes": [],
+    "bundler_version": "16.1.3",
+    "layers": [],
+    "import_map": "netlify:import-map",
+    "function_config": {
+      "api": {
+        "on_error": "fail"
+      }
+    }
+  },
+  "warnings": [
+    "Optional latest-types check to edge.netlify.com timed out. Edge bundling completed with exit 0."
+  ],
+  "deployed": false
+}

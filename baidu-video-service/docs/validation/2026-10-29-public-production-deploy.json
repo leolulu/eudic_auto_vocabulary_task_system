@@ -1,0 +1,32 @@
+{
+  "version": "1.1.0",
+  "siteId": "bc8085ef-8257-46a8-a572-28a79ffc6157",
+  "name": "baidu-word-video-service-c7e3",
+  "deployId": "6ae2c91fe0342fb995d9d601",
+  "origin": "https://baidu-word-video-service-c7e3.netlify.app",
+  "endpoint": "https://baidu-word-video-service-c7e3.netlify.app/v1/video",
+  "publishedAt": "2026-10-29T04:20:09.563Z",
+  "context": "deploy-preview",
+  "authentication": "none",
+  "defaultCors": "*",
+  "bundle": {
+    "bytes": 470195,
+    "sha256": "b00f1a8340dba849b40ff47a5f06977e15b210aef7dbf6d20283c7e0c6e2c4c5"
+  },
+  "cleanup": {
+    "netlifyKeyDeleteStatus": 204,
+    "localKeyFieldRemoved": true,
+    "localKeyFileRemoved": true
+  },
+  "tests": {
+    "server": {
+      "passed": 28
+    },
+    "python": {
+      "total": 174,
+      "passed": 173,
+      "skipped": 1
+    }
+  },
+  "gitWrites": false
+}

@@ -1,0 +1,43 @@
+{
+  "checkedAt": "2026-10-29T07:38:22.450304+00:00",
+  "siteId": "bc8085ef-8257-46a8-a572-28a79ffc6157",
+  "deployId": "6ae2de8e28a89d08b9a2e24f",
+  "previousDeployId": "6ae2c91fe0342fb995d9d601",
+  "context": "production",
+  "publishedAt": "2026-10-29T05:50:19.673Z",
+  "version": "1.1.0",
+  "origin": "https://baidu-word-video-service-c7e3.netlify.app",
+  "landing": {
+    "status": 200,
+    "sourceSha256": "240ea6de3179ece1bff18d1e706f60a04f9b045be4cf808e1dcdd8bb9f5c56ba",
+    "servedSha256": "b9ac924b6a83b985caf43fbece8cbe29b08d13cf87927495ac075d4254f41378",
+    "sourcePrefixMatchesLocal": true,
+    "netlifyInjectedHud": true,
+    "headingRemoved": true,
+    "queryInstructionsRemoved": true,
+    "healthLinkRetained": true,
+    "title": "健康检查",
+    "browserVisibleTextVerified": true
+  },
+  "api": {
+    "authentication": "none",
+    "healthStatus": 200,
+    "cors": "*",
+    "queryStatus": 200,
+    "word": "evidence",
+    "hasVideo": true,
+    "browserCrossOriginHealthReadable": true
+  },
+  "edgeBundle": {
+    "reused": true,
+    "bytes": 470195,
+    "sha256": "b00f1a8340dba849b40ff47a5f06977e15b210aef7dbf6d20283c7e0c6e2c4c5"
+  },
+  "historicalSnapshot": {
+    "status": 200,
+    "retainsOldQueryInstructions": true,
+    "deleted": false
+  },
+  "gitWrites": false,
+  "ok": true
+}
