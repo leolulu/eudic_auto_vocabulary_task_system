@@ -17,6 +17,7 @@ from dida365_project.models.upload_attachment import uploadAttachment
 from dida365_project.utils.dictvoice_util import get_dictvoice_bytes
 from dida365_project.utils.time_util import get_days_offset, get_today_arrow
 from utils.baidu_video_client import query_word_explanation_video
+from utils.video_compression import compress_video
 
 
 MEDIA_DOWNLOAD_TIMEOUT = (5, 60)
@@ -285,13 +286,14 @@ class Dida365Agent:
                     response.raise_for_status()
                     if len(response.content) < 12 or response.content[4:8] != b"ftyp":
                         raise ValueError("视频响应为空或不是有效 MP4 文件")
+                    video_data = compress_video(response.content)
 
                     # 从URL提取文件名
                     filename = url.split("/")[-1]
                     if not re.search(r"\.\w+$", filename):
                         filename += ".mp4"
 
-                    return (filename, io.BytesIO(response.content))
+                    return (filename, io.BytesIO(video_data))
                 except (requests.RequestException, ValueError) as e:
                     log_event("media", "video_download_failed", level=logging.ERROR, error=e,
                               word=word, url=safe_url(url), attempt=attempt + 1,

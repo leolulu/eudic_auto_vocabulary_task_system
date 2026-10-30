@@ -250,6 +250,19 @@ class AtomicAttachmentTest(unittest.TestCase):
                 self.agent.add_task("hello", "body", resume_existing=True)
         self.assertEqual(self.remote.creates, 0)
 
+    def test_video_compression_failure_prevents_creation_without_redownloading(self):
+        with (
+            patch("agent.dida365.get_dictvoice_bytes", side_effect=lambda word: media_files()),
+            patch("agent.dida365.query_word_explanation_video", return_value=["https://video.example/movie.mp4"]),
+            patch("agent.dida365.requests.get", return_value=response(VIDEO, content_type="video/mp4")) as download,
+            patch("agent.dida365.compress_video", side_effect=RuntimeError("视频转码失败")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "视频转码失败"):
+                self.agent.add_task("hello", "body", resume_existing=True)
+        download.assert_called_once()
+        self.assertEqual(self.remote.creates, 0)
+        self.assertEqual(self.remote.uploaded, [])
+
     def test_failed_or_invalid_video_download_is_not_silently_skipped(self):
         for result in (response(status=503), response(b"<html>error</html>", content_type="text/html")):
             with self.subTest(status=result.status_code):

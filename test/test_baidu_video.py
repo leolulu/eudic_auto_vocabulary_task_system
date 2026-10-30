@@ -140,6 +140,7 @@ class BaiduVideoQueryTest(unittest.TestCase):
 
     def test_attachment_download_uses_public_service_without_authorization(self):
         audio = io.BytesIO(b"audio")
+        processed_video = b"\x00\x00\x00\x18ftypmp42processed-video"
         calls = []
         def send(url, **kwargs):
             calls.append((url, kwargs))
@@ -148,10 +149,12 @@ class BaiduVideoQueryTest(unittest.TestCase):
             self.assertEqual(url, VIDEO_URL)
             return response(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom", content_type="video/mp4")
         dida = Mock()
-        with patch("utils.baidu_video_client.requests.get", side_effect=send), patch("agent.dida365.get_dictvoice_bytes", return_value=[("us.mp3", audio)]):
+        with patch("utils.baidu_video_client.requests.get", side_effect=send), patch("agent.dida365.get_dictvoice_bytes", return_value=[("us.mp3", audio)]), patch("agent.dida365.compress_video", return_value=processed_video) as compress:
             files = Dida365Agent(dida)._get_task_attachments_bytes("evidence")
         self.assertEqual([filename for filename, _ in files], ["us.mp3", "video.mp4"])
         self.assertEqual(files[1][1].getvalue()[4:8], b"ftyp")
+        self.assertEqual(files[1][1].getvalue(), processed_video)
+        compress.assert_called_once_with(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
         self.assertEqual(calls[1][1]["timeout"], MEDIA_DOWNLOAD_TIMEOUT)
         self.assertNotIn("Authorization", calls[0][1]["headers"])
         self.assertNotIn("Authorization", calls[1][1]["headers"])

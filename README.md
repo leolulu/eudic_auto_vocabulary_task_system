@@ -20,8 +20,11 @@
 
 - 本机通过 [uv](https://docs.astral.sh/uv/) 管理 Python 与依赖（无需全局 Python）。
 - 依赖见 `requirements.txt`（requests、schedule、arrow、PyYAML、playwright 等）。
+- 在其他机器上可使用 `pip install -r requirements.txt` 安装；本机使用 `uv pip install -r requirements.txt`。视频压缩依赖 `imageio-ffmpeg==0.7.0`，常见平台的 wheel 自带 FFmpeg，无需另装 FFmpeg 或设置系统 PATH。
 - 单词发音由 Python 直接请求百度翻译 `gettts`，使用美式、中速；失败后切换有道 HTTPS，不经过 Netlify，无需新增服务或配置。
 - 百度讲解视频通过独立 HTTP 服务查询，本地查询入口为 `utils/baidu_video_client.py`，无需本地 Node 或视频浏览器回退。服务源码位于 [baidu-video-service](baidu-video-service/README.md)。百度音标仍可能使用 Playwright，首次使用需安装浏览器内核：`uv run playwright install chromium`。
+
+下载的视频必须严格小于 **18,000,000 字节**才进入附件流程。小文件直接使用；超限文件先由 `utils/video_compression.py` 使用 H.264 / CRF 23 / medium 编码，音频转为 AAC 64 kbps，按比例限制到横屏 1280×720、竖屏 720×1280 内，不放大，保留完整时长与原帧率。CRF 结果合格就直接返回；失败或仍超限时，从原视频进入 two-pass，按 17.5 MB 总预算扣除音频及 256 KiB 封装预留后计算视频码率。每轮检查实际字节数，超限就继续降码率并从原视频编码，不设固定轮数；读取或编码错误明确报错，保持本词未完成。大小校验集中在视频处理函数，上传直接使用其返回结果。临时文件位于项目 `.cache/video-compression/`，结束后自动清理，处理过程记录到 `media.log`。
 
 ## 日志与排错
 
