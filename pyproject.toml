@@ -1,0 +1,20 @@
+[project]
+name = "eudic-auto-vocabulary-task-system"
+version = "0.1.0"
+description = "把欧路词典生词自动加工成滴答清单单词日报任务的工具"
+requires-python = ">=3.13"
+dependencies = [
+    "requests",
+    "flask",
+    "pyyaml",
+    "arrow",
+    "schedule",
+    "volcengine-python-sdk",
+    "playwright",
+    "imageio-ffmpeg==0.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-playwright",
+]

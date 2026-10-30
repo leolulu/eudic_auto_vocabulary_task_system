@@ -19,8 +19,8 @@
 ## 运行环境
 
 - 本机通过 [uv](https://docs.astral.sh/uv/) 管理 Python 与依赖（无需全局 Python）。
-- 依赖见 `requirements.txt`（requests、schedule、arrow、PyYAML、playwright 等）。
-- 在其他机器上可使用 `pip install -r requirements.txt` 安装；本机使用 `uv pip install -r requirements.txt`。视频压缩依赖 `imageio-ffmpeg==0.7.0`，常见平台的 wheel 自带 FFmpeg，无需另装 FFmpeg 或设置系统 PATH。
+- 依赖统一声明在 `pyproject.toml`：运行依赖在 `[project].dependencies`（requests、Flask、PyYAML、arrow、schedule、volcengine-python-sdk、playwright 等），测试依赖在 `[dependency-groups].dev`（pytest-playwright）。
+- 在项目根目录执行 `uv sync`，uv 会按 `uv.lock` 创建 `.venv` 并安装全部依赖（含 dev 组）；换机器同样只需 `uv sync`，uv 会自动准备 Python，无需手工安装解释器。视频压缩依赖 `imageio-ffmpeg==0.7.0`，常见平台的 wheel 自带 FFmpeg，无需另装 FFmpeg 或设置系统 PATH。
 - 单词发音由 Python 直接请求百度翻译 `gettts`，使用美式、中速；失败后切换有道 HTTPS，不经过 Netlify，无需新增服务或配置。
 - 百度讲解视频通过独立 HTTP 服务查询，本地查询入口为 `utils/baidu_video_client.py`，无需本地 Node 或视频浏览器回退。服务源码位于 [baidu-video-service](baidu-video-service/README.md)。百度音标仍可能使用 Playwright，首次使用需安装浏览器内核：`uv run playwright install chromium`。
 

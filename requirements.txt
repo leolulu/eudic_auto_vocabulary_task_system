@@ -1,9 +1,0 @@
-requests
-Flask
-flask-cors
-PyYAML
-arrow
-schedule
-volcengine-python-sdk
-pytest-playwright
-imageio-ffmpeg==0.7.0
