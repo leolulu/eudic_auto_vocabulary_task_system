@@ -5,7 +5,7 @@ from collections import Counter
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import requests
 
@@ -44,26 +44,37 @@ class PronunciationProviderTest(unittest.TestCase):
     def setUp(self):
         self.sleep = self.enterContext(patch("dida365_project.utils.dictvoice_util.sleep"))
 
-    def test_baidu_is_first_and_preserves_the_existing_attachment_contract(self):
+    def test_both_sources_are_downloaded_with_distinct_attachment_names(self):
         with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response()) as send:
             files = get_dictvoice_bytes("rock & roll")
-        self.assertEqual(files[0][0], "us.mp3")
-        self.assertEqual(files[0][1].getvalue(), AUDIO)
-        send.assert_called_once_with(
-            "https://fanyi.baidu.com/gettts", params={"lan": "en", "text": "rock & roll", "spd": 3},
-            timeout=(5, 30),
-        )
-
-    def test_transient_baidu_failure_is_retried_before_fallback(self):
-        with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[requests.ReadTimeout(), response()]) as send:
-            self.assertEqual(get_dictvoice_bytes("hello")[0][1].getvalue(), AUDIO)
+        self.assertEqual([(name, data.getvalue()) for name, data in files],
+                         [("baidu-us.mp3", AUDIO), ("youdao-us.mp3", AUDIO)])
         self.assertEqual(send.call_count, 2)
-        self.assertTrue(all("baidu.com" in call.args[0] for call in send.call_args_list))
+        send.assert_has_calls([
+            call("https://fanyi.baidu.com/gettts", params={"lan": "en", "text": "rock & roll", "spd": 3}, timeout=(5, 30)),
+            call("https://dict.youdao.com/dictvoice", params={"type": 0, "audio": "rock & roll"}, timeout=(5, 30)),
+        ])
+
+    def test_each_attachment_keeps_its_own_provider_audio(self):
+        youdao_audio = b"ID3\x04\x00\x00\x00\x00\x00\x00" + AUDIO
+        with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[response(), response(youdao_audio)]):
+            files = get_dictvoice_bytes("hello")
+        self.assertEqual([(name, data.getvalue()) for name, data in files],
+                         [("baidu-us.mp3", AUDIO), ("youdao-us.mp3", youdao_audio)])
+
+    def test_transient_baidu_failure_is_retried_and_both_audio_files_are_kept(self):
+        with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[requests.ReadTimeout(), response(), response()]) as send:
+            files = get_dictvoice_bytes("hello")
+        self.assertEqual([name for name, _ in files], ["baidu-us.mp3", "youdao-us.mp3"])
+        self.assertEqual(send.call_count, 3)
+        self.assertTrue(all("baidu.com" in request.args[0] for request in send.call_args_list[:2]))
+        self.assertEqual(send.call_args.args[0], "https://dict.youdao.com/dictvoice")
         self.sleep.assert_called_once_with(1)
 
     def test_youdao_is_used_after_baidu_retries_are_exhausted(self):
         with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[requests.Timeout()] * 3 + [response()]) as send:
-            self.assertEqual(get_dictvoice_bytes("hello")[0][1].getvalue(), AUDIO)
+            files = get_dictvoice_bytes("hello")
+        self.assertEqual([(name, data.getvalue()) for name, data in files], [("youdao-us.mp3", AUDIO)])
         self.assertEqual(send.call_count, 4)
         self.assertEqual(send.call_args.args[0], "https://dict.youdao.com/dictvoice")
         self.assertEqual(send.call_args.kwargs["params"], {"type": 0, "audio": "hello"})
@@ -74,19 +85,36 @@ class PronunciationProviderTest(unittest.TestCase):
         self.assertEqual(send.call_count, 2)
         self.sleep.assert_not_called()
 
+    def test_youdao_failure_does_not_discard_valid_baidu_audio(self):
+        for failure in (requests.ReadTimeout(), response(b"", status=204)):
+            with self.subTest(failure=type(failure).__name__):
+                with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[response()] + [failure] * 3) as send:
+                    files = get_dictvoice_bytes("hello")
+                self.assertEqual([(name, data.getvalue()) for name, data in files], [("baidu-us.mp3", AUDIO)])
+                self.assertEqual(send.call_count, 4)
+
+    def test_youdao_explicitly_unavailable_keeps_baidu_audio(self):
+        with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[response(), no_youdao_audio()]) as send:
+            files = get_dictvoice_bytes("hello")
+        self.assertEqual([(name, data.getvalue()) for name, data in files], [("baidu-us.mp3", AUDIO)])
+        self.assertEqual(send.call_count, 2)
+
     def test_invalid_audio_is_never_accepted_as_success(self):
         for content, content_type in [(b"", "audio/mpeg"), (b"<html>error</html>", "text/html"), (b"ID3", "audio/mpeg"), (AUDIO[:20], "audio/mpeg")]:
             with self.subTest(content=content[:20], content_type=content_type):
                 def send(url, **kwargs):
                     return response(content, content_type=content_type) if "baidu.com" in url else response()
                 with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=send) as request_get:
-                    self.assertEqual(get_dictvoice_bytes("hello")[0][1].getvalue(), AUDIO)
+                    files = get_dictvoice_bytes("hello")
+                self.assertEqual([(name, data.getvalue()) for name, data in files], [("youdao-us.mp3", AUDIO)])
                 self.assertEqual(request_get.call_count, 4)
 
     def test_mp3_with_id3_metadata_is_accepted(self):
         audio = b"ID3\x04\x00\x00\x00\x00\x00\x00" + AUDIO
         with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response(audio)):
-            self.assertEqual(get_dictvoice_bytes("hello")[0][1].getvalue(), audio)
+            files = get_dictvoice_bytes("hello")
+        self.assertEqual([(name, data.getvalue()) for name, data in files],
+                         [("baidu-us.mp3", audio), ("youdao-us.mp3", audio)])
 
     def test_both_providers_failing_raises_instead_of_returning_no_audio(self):
         with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response(status=503)) as send:
@@ -279,6 +307,24 @@ class AtomicAttachmentTest(unittest.TestCase):
         self.assertEqual(self.remote.uploaded, ["us.mp3"])
         self.assertIn("![file](attachment/us.mp3)", task.content)
 
+    def test_both_provider_audio_files_are_uploaded_and_referenced(self):
+        with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response()) as send, patch("agent.dida365.query_word_explanation_video", return_value=[]):
+            task = self.agent.add_task("hello", "body", resume_existing=True)
+        self.assertEqual(Counter(self.remote.uploaded), {"baidu-us.mp3": 1, "youdao-us.mp3": 1})
+        self.assertEqual(task.content.count("attachment/baidu-us.mp3"), 1)
+        self.assertEqual(task.content.count("attachment/youdao-us.mp3"), 1)
+        self.assertEqual(send.call_count, 2)
+
+    def test_partial_audio_upload_retry_does_not_duplicate_either_source(self):
+        self.remote.fail_after_upload = True
+        with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response()) as send, patch("agent.dida365.query_word_explanation_video", return_value=[]):
+            task = self.agent.add_task("hello", "body", resume_existing=True)
+        self.assertEqual(self.remote.creates, 1)
+        self.assertEqual(Counter(self.remote.uploaded), {"baidu-us.mp3": 1, "youdao-us.mp3": 1})
+        self.assertEqual(task.content.count("attachment/baidu-us.mp3"), 1)
+        self.assertEqual(task.content.count("attachment/youdao-us.mp3"), 1)
+        self.assertEqual(send.call_count, 2)
+
     def test_create_timeout_is_reconciled_without_creating_twice(self):
         self.remote.fail_after_create = True
         with patch.object(self.agent, "_get_task_attachments_bytes", side_effect=lambda word: media_files()):
@@ -345,6 +391,32 @@ class AtomicWordHistoryTest(unittest.TestCase):
                 self.bearer.bear_eudic_to_dida365()
         self.assertEqual(self.history, set())
         self.assertEqual(self.remote.creates, 0)
+
+    def test_both_audio_files_are_present_before_history_is_recorded(self):
+        def save(word):
+            self.assertEqual(Counter(self.remote.uploaded), {"baidu-us.mp3": 1, "youdao-us.mp3": 1})
+            self.assertIn("attachment/baidu-us.mp3", self.remote.tasks[word]["content"])
+            self.assertIn("attachment/youdao-us.mp3", self.remote.tasks[word]["content"])
+            self.history.add(word)
+        with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response()), patch("agent.dida365.query_word_explanation_video", return_value=[]), patch("main.add_word_to_his_set", side_effect=save):
+            self.bearer.bear_eudic_to_dida365()
+        self.assertEqual(self.history, {"hello"})
+
+    def test_missing_second_audio_upload_cannot_update_history(self):
+        upload = self.remote.upload_attachment
+        def upload_only_baidu(*attachments):
+            upload(*(attachment for attachment in attachments if attachment.file_name == "baidu-us.mp3"))
+        with patch("dida365_project.utils.dictvoice_util.requests.get", return_value=response()), patch("agent.dida365.query_word_explanation_video", return_value=[]), patch.object(self.remote, "upload_attachment", side_effect=upload_only_baidu):
+            with self.assertRaisesRegex(RuntimeError, "未完整同步"):
+                self.bearer.bear_eudic_to_dida365()
+        self.assertEqual(self.history, set())
+        self.assertEqual(self.remote.uploaded, ["baidu-us.mp3"])
+
+    def test_one_source_failure_still_completes_with_the_other_audio(self):
+        with patch("dida365_project.utils.dictvoice_util.requests.get", side_effect=[response()] + [requests.ReadTimeout()] * 3), patch("agent.dida365.query_word_explanation_video", return_value=[]):
+            self.bearer.bear_eudic_to_dida365()
+        self.assertEqual(self.history, {"hello"})
+        self.assertEqual(self.remote.uploaded, ["baidu-us.mp3"])
 
     def test_confirmed_no_audio_and_no_video_complete_once_without_retrying_forever(self):
         with patch("dida365_project.utils.dictvoice_util.request_baidu_voice", return_value=None) as baidu, patch("dida365_project.utils.dictvoice_util.requests.get", return_value=no_youdao_audio()) as send, patch("agent.dida365.query_word_explanation_video", return_value=[]):

@@ -105,26 +105,22 @@ def get_dictvoice_bytes(word):
     result = []
     for type_name, type_value in VoiceType.__members__.items():
         type_value = type_value.value
-        baidu_error = None
-        try:
-            r_content = request_baidu_voice(type_value, word)
-        except PronunciationError as error:
-            baidu_error = error
-            r_content = None
-        if r_content is None:
-            log_event("media", "voice_provider_fallback", word=word, provider="baidu", next_provider="youdao",
-                      reason="error" if baidu_error is not None else "unavailable")
+        voice_files = []
+        errors = []
+        for provider, request_voice in (("baidu", request_baidu_voice), ("youdao", request_dictvoice)):
             try:
-                r_content = request_dictvoice(type_value, word)
+                r_content = request_voice(type_value, word)
             except PronunciationError as error:
-                raise PronunciationError(f"单词 [{word}] 的发音仍有来源异常，本词未完成") from error
-        if r_content is None:
-            if baidu_error is not None:
-                raise PronunciationError(f"单词 [{word}] 的百度发音异常，有道无资源，本词未完成") from baidu_error
+                errors.append(error)
+                continue
+            if r_content is not None:
+                voice_files.append((f"{provider}-{type_name.lower()}.mp3", io.BytesIO(r_content)))
+        if voice_files:
+            result.extend(voice_files)
+        elif errors:
+            raise PronunciationError(f"单词 [{word}] 的发音仍有来源异常，本词未完成") from errors[-1]
+        else:
             log_event("media", "voice_unavailable", word=word, voice_type=type_name,
                       reason="both_sources_confirmed_unavailable")
             print(f"单词 [{word}] 的百度和有道均明确无可用发音，按无音频结果继续生成。")
-            continue
-        # 添加.mp3扩展名
-        result.append((type_name.lower() + ".mp3", io.BytesIO(r_content)))
     return result
